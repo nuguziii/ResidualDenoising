@@ -3,15 +3,10 @@ import torch
 import torch.nn as nn
 from torch.nn.modules.loss import _Loss
 import torch.nn.init as init
-from torch.utils.data import DataLoader
-import torch.optim as optim
-from torch.optim.lr_scheduler import MultiStepLR
-import data_generator as dg
-from data_generator import DenoisingDataset
 
 class Denoising(nn.Module):
     def __init__(self, depth=17, n_channels=64, image_channels=1, use_bnorm=True, kernel_size=3):
-        super(DnCNN, self).__init__()
+        super(Denoising, self).__init__()
         kernel_size = 3
         padding = 1
         layers = []
