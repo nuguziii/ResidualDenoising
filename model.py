@@ -77,18 +77,41 @@ class JointNet(nn.Module):
             j_layers.append(nn.Conv2d(in_channels=32, out_channels=image_channels, kernel_size=5, stride=1, padding=2))
         elif kernel_size is 3:
             f_layers.append(nn.Conv2d(in_channels=image_channels, out_channels=96, kernel_size=3, stride=1, padding=1))
-            f_layers.append(nn.Conv2d(in_channels=96, out_channels=96, kernel_size=3, stride=1, padding=1))
-            f_layers.append(nn.Conv2d(in_channels=96, out_channels=96, kernel_size=3, stride=1, padding=1))
             f_layers.append(nn.Conv2d(in_channels=96, out_channels=48, kernel_size=1, stride=1, padding=0))
-            f_layers.append(nn.Conv2d(in_channels=48, out_channels=48, kernel_size=3, stride=1, padding=1))
             f_layers.append(nn.Conv2d(in_channels=48, out_channels=image_channels, kernel_size=3, stride=1, padding=1))
 
             j_layers.append(nn.Conv2d(in_channels=image_channels*2, out_channels=64, kernel_size=3, stride=1, padding=1))
-            j_layers.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1))
-            j_layers.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1))
             j_layers.append(nn.Conv2d(in_channels=64, out_channels=32, kernel_size=1, stride=1, padding=0))
-            j_layers.append(nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1))
             j_layers.append(nn.Conv2d(in_channels=32, out_channels=image_channels, kernel_size=3, stride=1, padding=1))
+
+        self.feat = nn.Sequential(*f_layers)
+        self.Net = nn.Sequential(*j_layers)
+
+        self._initialize_weights()
+
+    def forward(self, x, g):
+        x = self.feat(x)
+        g = self.feat(g)
+        x = torch.cat((x, g), 1)
+        out = self.Net(x)
+        return out
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                init.orthogonal_(m.weight)
+                print('init weight')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+
+class UNet(nn.Module):
+    def __init__(self, image_channels=1, kernel_size=9):
+        super(JointNet, self).__init__()
+        kernel_size = 3
+        padding = 1
+
+        f_layers = []
+        j_layers = []
 
         self.feat = nn.Sequential(*f_layers)
         self.Net = nn.Sequential(*j_layers)
