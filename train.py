@@ -55,78 +55,88 @@ class perceptual_loss(_Loss):
     """
     def __init__(self, size_average=None, reduce=None, reduction='sum', device="cuda:0"):
         super(perceptual_loss, self).__init__(size_average, reduce, reduction)
-        self.d = gan_loss()
         self.vgg = content_loss()
         if torch.cuda.is_available():
-            self.d = self.d.to(device)
             self.vgg = self.vgg.to(device)
 
-    def forward(self, input, target):
-        optimizer = optim.Adam(self.d.parameters(), lr=1e-3)
-        criterion = discriminator_loss()
-        d_loss = criterion(self.d(input),self.d(target))
-        optimizer.step()
+    def forward(self, input, target, fake):
+        mse_loss = torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum').div_(2)
+        gan_loss = generator_loss(fake)
+        vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[3], self.vgg(target)[3], size_average=None, reduce=None, reduction='sum').div_(2)
+        return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
 
-        mse_loss = torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum')
-        gan_loss = generator_loss(self.d(input))
-        vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[3], self.vgg(target)[3], size_average=None, reduce=None, reduction='sum')
-        return mse_loss+1e-3*gan_loss+2e-6*vgg_loss, d_loss
-
-def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-3, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None, save_name=None, discription=None):
+def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None, save_name=None, discription=None):
     device = torch.device(device)
 
     print('--\t', discription)
     print('--\t epoch %4d batch_size %4d sigma %4d' % (n_epoch, batch_size, sigma))
 
-    model = Model(model_dir=model_dir,model_name=model_name, guidance='denoised', kernel_size=kernel_size) #guidance='noisy, denoised'
+    modelG = Model(model_dir=model_dir,model_name=model_name, guidance='denoised', kernel_size=3) #guidance='noisy, denoised'
+    modelD = gan_loss()
 
-    model.train()
+    modelG.train()
+    modelD.train()
 
-    criterion = perceptual_loss(device)
+    criterionG = perceptual_loss(device)
+    criterionD = discriminator_loss()
 
     if torch.cuda.is_available():
-        model.to(device)
+        modelG.to(device)
+        modelD.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    scheduler = MultiStepLR(optimizer, milestones=[30, 60, 90], gamma=0.2)  # learning rates
+    optimizerG = optim.Adam(modelG.parameters(), lr=lr)
+    optimizerD = optim.Adam(modelD.parameters(), lr=lr)
+    scheduler = MultiStepLR(optimizerG, milestones=[30, 60, 90], gamma=0.2)  # learning rates
+
     for epoch in range(n_epoch):
         x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
         x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
         dataset = DenoisingDataset(x, sigma)
         loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
-        epoch_loss = 0
+        epoch_loss_g = 0
         start_time = time.time()
         n_count=0
         for cnt, batch_yx in enumerate(loader):
-            optimizer.zero_grad()
             if torch.cuda.is_available():
                 batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
-            loss, d_loss = criterion(model(batch_noise), batch_original)
-            epoch_loss += loss.item()
-            loss.backward()
-            optimizer.step()
+
+            modelD.zero_grad()
+            fake = modelD(modelG(batch_noise))
+            d_loss = criterionD(fake, modelD(batch_original))
+            d_loss.backward(retain_graph=True)
+            optimizerD.step()
+
+            modelG.zero_grad()
+            g_loss = criterionG(modelG(batch_noise), batch_original, fake)
+            epoch_loss_g += g_loss.item()
+            g_loss.backward()
+            optimizerG.step()
             if cnt%100 == 0:
-                print('%4d %4d / %4d g_loss = %2.4f\t(d_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, loss.item()/batch_size, d_loss.item()/batch_size))
+                print('%4d %4d / %4d g_loss = %2.4f\t(d_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, d_loss.item()/batch_size))
             n_count +=1
 
         elapsed_time = time.time() - start_time
-        print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
-        torch.save(model, os.path.join(model_dir, save_name))
+        print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss_g/n_count, elapsed_time))
+        torch.save(modelG, os.path.join(model_dir, save_name))
 
-    torch.save(model, os.path.join(model_dir, save_name))
+    torch.save(modelG, os.path.join(model_dir, save_name))
 
-def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-3, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None, save_name=None, guidance='denoised'):
+def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None, save_name=None, guidance='denoised'):
     device = torch.device(device)
 
-    print('\n\n')
+    print('\n')
     print('--\t This model is pre-trained SNet saved as ',save_name )
     print('--\t epoch %4d batch_size %4d sigma %4d' % (n_epoch, batch_size, sigma))
+    print('\n')
 
     DNet = torch.load(os.path.join(model_dir, model_name[0]))
     model = JointNet(kernel_size=3) #guidance='noisy, denoised'
 
     DNet.eval()
     model.train()
+
+    print(model)
+    print("\n")
 
     criterion = sum_squared_error()
 
@@ -151,14 +161,14 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-3, device="cuda:0
 
             r = DNet(batch_noise)
             d = batch_noise-r
-            r=1.55*(r+0.5)-0.8
+            #r=1.55*(r+0.5)-0.8
             if guidance is 'noisy':
                 s = model(r, batch_noise)
             elif guidance is 'denoised':
                 s = model(r, d)
-            target = 1.8*(batch_original-d+0.5)-0.8
+            #target = 1.8*(batch_original-d+0.5)-0.8
 
-            loss = criterion(s, target)
+            loss = criterion(s, batch_original-d)
             epoch_loss += loss.item()
             loss.backward()
             optimizer.step()
@@ -172,5 +182,54 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-3, device="cuda:0
 
     torch.save(model, os.path.join(model_dir, save_name))
 
+def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, device="cuda:0", data_dir='./data/Train400', model_dir='models', save_name=None):
+    device = torch.device(device)
+
+    print('\n')
+    print('--\t This model is pre-trained DNet saved as ',save_name )
+    print('--\t epoch %4d batch_size %4d sigma %4d depth %4d' % (n_epoch, batch_size, sigma, depth))
+    print('\n')
+
+    model = DNet(depth=depth)
+
+    model.train()
+
+    print(model)
+    print("\n")
+
+    criterion = sum_squared_error()
+
+    if torch.cuda.is_available():
+        model.to(device)
+
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    scheduler = MultiStepLR(optimizer, milestones=[30, 60, 90], gamma=0.2)  # learning rates
+    for epoch in range(n_epoch):
+        x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
+        x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
+        dataset = DenoisingDataset(x, sigma)
+        loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
+        epoch_loss = 0
+        start_time = time.time()
+        n_count=0
+        for cnt, batch_yx in enumerate(loader):
+            optimizer.zero_grad()
+            if torch.cuda.is_available():
+                batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
+
+            r = model(batch_noise)
+            loss = criterion(batch_noise-r, batch_original)
+            epoch_loss += loss.item()
+            loss.backward()
+            optimizer.step()
+            if cnt%100 == 0:
+                print('%4d %4d / %4d loss = %2.4f' % (epoch+1, cnt, x.size(0)//batch_size, loss.item()/batch_size))
+            n_count +=1
+
+        elapsed_time = time.time() - start_time
+        print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
+        torch.save(model, os.path.join(model_dir, save_name))
+
+    torch.save(model, os.path.join(model_dir, save_name))
 if __name__ == '__main__':
     pretrain_SNet(device="cuda:0", model_name=['DNet_sigma=25_1.pth'], save_name='SNet_25_denoised.pth', guidance='denoised')
