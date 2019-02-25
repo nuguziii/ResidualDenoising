@@ -62,7 +62,7 @@ class perceptual_loss(_Loss):
     def forward(self, input, target, fake):
         mse_loss = torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum').div_(2)
         gan_loss = generator_loss(fake)
-        vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[3], self.vgg(target)[3], size_average=None, reduce=None, reduction='sum').div_(2)
+        vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum').div_(2)
         return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
 
 def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None, save_name=None, discription=None):
@@ -84,8 +84,8 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
         modelG.to(device)
         modelD.to(device)
 
-    optimizerG = optim.Adam(modelG.parameters(), lr=lr)
-    optimizerD = optim.Adam(modelD.parameters(), lr=lr)
+    optimizerG = optim.Adam(modelG.parameters(), lr=lr, weight_decay=1e-5)
+    optimizerD = optim.Adam(modelD.parameters(), lr=lr, weight_decay=1e-5)
     scheduler = MultiStepLR(optimizerG, milestones=[30, 60, 90], gamma=0.2)  # learning rates
 
     for epoch in range(n_epoch):
