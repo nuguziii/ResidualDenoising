@@ -144,7 +144,7 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0
         DNet.to(device)
         model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
     scheduler = MultiStepLR(optimizer, milestones=[30, 60, 90], gamma=0.2)  # learning rates
     for epoch in range(n_epoch):
         x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
@@ -202,7 +202,7 @@ def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, devi
     if torch.cuda.is_available():
         model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
     scheduler = MultiStepLR(optimizer, milestones=[30, 60, 90], gamma=0.2)  # learning rates
     for epoch in range(n_epoch):
         x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
