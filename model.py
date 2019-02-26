@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import os
+import torch.nn.functional as F
+from unet_part import *
 
 class Model(nn.Module):
     def __init__(self, model_dir=None, model_name=[], guidance=None, kernel_size=9):
@@ -16,7 +18,6 @@ class Model(nn.Module):
         r = self.DNet(x)
         d = x-r
 
-        r=1.55*(r+0.5)-0.8
         if self.guide is 'noisy':
             s = self.SNet(r, x)
         elif self.guide is 'denoised':
@@ -105,30 +106,28 @@ class JointNet(nn.Module):
                     init.constant_(m.bias, 0)
 
 class UNet(nn.Module):
-    def __init__(self, image_channels=1, kernel_size=9):
-        super(JointNet, self).__init__()
-        kernel_size = 3
-        padding = 1
+    def __init__(self, n_channels):
+        super(UNet, self).__init__()
+        self.inc = inconv(n_channels, 64)
+        self.down1 = down(64, 128)
+        self.down2 = down(128, 256)
+        self.down3 = down(256, 512)
+        self.down4 = down(512, 512)
+        self.up1 = up(1024, 256)
+        self.up2 = up(512, 128)
+        self.up3 = up(256, 64)
+        self.up4 = up(128, 64)
+        self.outc = outconv(64, n_channels)
 
-        f_layers = []
-        j_layers = []
-
-        self.feat = nn.Sequential(*f_layers)
-        self.Net = nn.Sequential(*j_layers)
-
-        self._initialize_weights()
-
-    def forward(self, x, g):
-        x = self.feat(x)
-        g = self.feat(g)
-        x = torch.cat((x, g), 1)
-        out = self.Net(x)
+    def forward(self, x):
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        out = self.outc(x)
         return out
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                init.orthogonal_(m.weight)
-                print('init weight')
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
