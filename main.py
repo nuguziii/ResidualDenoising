@@ -1,4 +1,5 @@
-from train import pretrain_SNet
+from train import pretrain_SNet, pretrain_DNet
 
 if __name__ == '__main__':
-    pretrain_SNet(lr=1e-3,device="cuda:0", model_name=['DNet(sigma=25)_2.pth'], save_name='SNet(25_denoised)_2.pth', guidance='denoised')
+    pretrain_DNet(device="cuda:0", save_name='DNet(sigma=25)_1.pth')
+    pretrain_DNet(depth=7, device="cuda:0", save_name='DNet(sigma=25)_2.pth')
