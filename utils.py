@@ -13,13 +13,9 @@ class conv1_layers(nn.Module):
 
         f_layers.append(nn.Conv2d(in_channels=image_channels, out_channels=96, kernel_size=3, stride=1, padding=1))
         f_layers.append(nn.Conv2d(in_channels=96, out_channels=96, kernel_size=3, stride=1, padding=1))
-        f_layers.append(nn.BatchNorm2d(96, eps=0.0001, momentum = 0.95))
         f_layers.append(nn.Conv2d(in_channels=96, out_channels=96, kernel_size=3, stride=1, padding=1))
-        f_layers.append(nn.BatchNorm2d(96, eps=0.0001, momentum = 0.95))
         f_layers.append(nn.Conv2d(in_channels=96, out_channels=48, kernel_size=1, stride=1, padding=0))
-        f_layers.append(nn.BatchNorm2d(48, eps=0.0001, momentum = 0.95))
         f_layers.append(nn.Conv2d(in_channels=48, out_channels=48, kernel_size=3, stride=1, padding=1))
-        f_layers.append(nn.BatchNorm2d(48, eps=0.0001, momentum = 0.95))
         f_layers.append(nn.Conv2d(in_channels=48, out_channels=image_channels, kernel_size=3, stride=1, padding=1))
 
         self.feat = nn.Sequential(*f_layers)
@@ -42,16 +38,16 @@ class conv1_layers(nn.Module):
                 init.constant_(m.bias, 0)
 
 class conv2_layers(nn.Module):
-    def __init__(self, image_channels=1):
+    def __init__(self, in_channels=1, out_channels=1):
         super(conv2_layers, self).__init__()
         layers = []
 
-        layers.append(nn.Conv2d(in_channels=image_channels*2, out_channels=64, kernel_size=3, stride=1, padding=1))
+        layers.append(nn.Conv2d(in_channels=in_channels, out_channels=64, kernel_size=3, stride=1, padding=1))
         layers.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1))
         layers.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1))
         layers.append(nn.Conv2d(in_channels=64, out_channels=32, kernel_size=1, stride=1, padding=0))
         layers.append(nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1))
-        layers.append(nn.Conv2d(in_channels=32, out_channels=image_channels, kernel_size=3, stride=1, padding=1))
+        layers.append(nn.Conv2d(in_channels=32, out_channels=out_channels, kernel_size=3, stride=1, padding=1))
 
         self.conv = nn.Sequential(*layers)
 
@@ -143,3 +139,103 @@ class dynamic_filter(nn.Module):
         x_ = self.conv1(x_)
         filter = self.softmax(x_)
         return filter
+
+class TPN(nn.Module):
+    def __init__(self, image_channels=1):
+        super().__init__()
+        self.conv1_1 = nn.Sequential(
+            nn.Conv2d(image_channels, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True)
+        )
+        self.conv1_2 = nn.Sequential(
+            nn.Conv2d(image_channels, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True)
+        )
+        self.conv1_3 = nn.Sequential(
+            nn.Conv2d(image_channels, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True)
+        )
+        self.conv1_4 = nn.Sequential(
+            nn.Conv2d(image_channels, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True)
+        )
+        self.conv2_1 = nn.Sequential(
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True)
+        )
+        self.conv2_2 = nn.Sequential(
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True)
+        )
+        self.conv2_3 = nn.Sequential(
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True)
+        )
+        self.conv2_4 = nn.Sequential(
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True)
+        )
+        self.conv3_1 = nn.Sequential(
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True)
+        )
+        self.conv3_2 = nn.Sequential(
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True)
+        )
+        self.conv3_3 = nn.Sequential(
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True)
+        )
+        self.conv3_4 = nn.Sequential(
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True)
+        )
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(16, 1, 3, 1, 1),
+            nn.BatchNorm2d(1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        N, C, h, w = x.size()
+
+        size1 = x
+        size2 = F.interpolate(x, size=(h // 2, w // 2))
+        size4 = F.interpolate(x, size=(h // 4, w // 4))
+        size8 = F.interpolate(x, size=(h // 8, w // 8))
+
+        size1 = self.conv1_1(size1)
+        size2 = self.conv1_2(size2)
+        size4 = self.conv1_3(size4)
+        size8 = self.conv1_4(size8)
+
+        size1 = self.conv2_1(size1)
+        size2 = self.conv2_2(size2)
+        size4 = self.conv2_3(size4)
+        size8 = self.conv2_4(size8)
+
+        size1 = self.conv3_1(size1)
+        size2 = self.conv3_2(size2)
+        size4 = self.conv3_3(size4)
+        size8 = self.conv3_4(size8)
+
+        size2 = F.interpolate(size2, size=(h, w))
+        size4 = F.interpolate(size4, size=(h, w))
+        size8 = F.interpolate(size8, size=(h, w))
+
+        concat = torch.cat((size1, size2, size4, size8), 1)
+
+        return self.conv4(concat)
