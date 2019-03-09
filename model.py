@@ -4,14 +4,14 @@ import torch.nn as nn
 import torch.nn.init as init
 import os
 import torch.nn.functional as F
-from unet_part import *
+from utils import *
 
 class Model(nn.Module):
     def __init__(self, model_dir=None, model_name=[], guidance=None, kernel_size=9):
         super(Model, self).__init__()
         self.DNet = torch.load(os.path.join(model_dir, model_name[0]))
         self.SNet = torch.load(os.path.join(model_dir, model_name[1]))
-        self.JFNet = JointNet(kernel_size=kernel_size)
+        #self.JFNet = JointNet(kernel_size=kernel_size)
         self.guide = guidance
 
     def forward(self, x):
@@ -23,7 +23,7 @@ class Model(nn.Module):
         elif self.guide is 'denoised':
             s = self.SNet(r, d)
 
-        out = self.JFNet(s, d)
+        out = s+d
         return out
 
 class DNet(nn.Module):
@@ -59,75 +59,147 @@ class DNet(nn.Module):
                 init.constant_(m.weight, 1)
                 init.constant_(m.bias, 0)
 
-class JointNet(nn.Module):
-    def __init__(self, image_channels=1, kernel_size=9):
-        super(JointNet, self).__init__()
-        kernel_size = 3
-        padding = 1
-
-        f_layers = []
-        j_layers = []
-
-        if kernel_size is 9:
-            f_layers.append(nn.Conv2d(in_channels=image_channels, out_channels=96, kernel_size=9, stride=1, padding=2))
-            f_layers.append(nn.Conv2d(in_channels=96, out_channels=48, kernel_size=1, stride=1, padding=2))
-            f_layers.append(nn.Conv2d(in_channels=48, out_channels=image_channels, kernel_size=5, stride=1, padding=2))
-
-            j_layers.append(nn.Conv2d(in_channels=image_channels*2, out_channels=64, kernel_size=9, stride=1, padding=2))
-            j_layers.append(nn.Conv2d(in_channels=64, out_channels=32, kernel_size=1, stride=1, padding=2))
-            j_layers.append(nn.Conv2d(in_channels=32, out_channels=image_channels, kernel_size=5, stride=1, padding=2))
-        elif kernel_size is 3:
-            f_layers.append(nn.Conv2d(in_channels=image_channels, out_channels=96, kernel_size=3, stride=1, padding=1))
-            f_layers.append(nn.Conv2d(in_channels=96, out_channels=48, kernel_size=1, stride=1, padding=0))
-            f_layers.append(nn.Conv2d(in_channels=48, out_channels=image_channels, kernel_size=3, stride=1, padding=1))
-
-            j_layers.append(nn.Conv2d(in_channels=image_channels*2, out_channels=64, kernel_size=3, stride=1, padding=1))
-            j_layers.append(nn.Conv2d(in_channels=64, out_channels=32, kernel_size=1, stride=1, padding=0))
-            j_layers.append(nn.Conv2d(in_channels=32, out_channels=image_channels, kernel_size=3, stride=1, padding=1))
-
-        self.feat = nn.Sequential(*f_layers)
-        self.Net = nn.Sequential(*j_layers)
-
-        self._initialize_weights()
+class SNet_dfver1(nn.Module):
+    def __init__(self, kernel_size=9, image_channels=1):
+        super(SNet_ver1, self).__init__()
+        layers = []
+        self.conv1 = conv_layers()
+        self.conv2 = conv_layers()
+        self.filter = dynamic_filter(image_channels=2)
 
     def forward(self, x, g):
-        x = self.feat(x)
-        g = self.feat(g)
-        x = torch.cat((x, g), 1)
-        out = self.Net(x)
+        x_ = self.conv1(x)
+        g_ = self.conv2(g)
+        x_ = torch.cat((x_, g_), 1)
+        filter = self.filter(x_)
+
+        patches = F.pad(x, (4,4,4,4), "constant", 0)
+        patches = patches.unfold(2,9,1).unfold(3,9,1)
+        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
+        out = torch.sum(patches*filter, 1, keepdim=True)
         return out
 
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                init.orthogonal_(m.weight)
-                print('init weight')
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
+class SNet_dfver2(nn.Module):
+    def __init__(self, kernel_size=9, image_channels=1):
+        super(SNet_ver1, self).__init__()
+        layers = []
+        self.conv1 = conv2_layers()
+        self.filter_x = dynamic_filter(image_channels=1)
+        self.filter_g = dynamic_filter(image_channels=1)
 
-class UNet(nn.Module):
-    def __init__(self, n_channels):
-        super(UNet, self).__init__()
-        self.inc = inconv(n_channels, 64)
-        self.down1 = down(64, 128)
-        self.down2 = down(128, 256)
-        self.down3 = down(256, 512)
-        self.down4 = down(512, 512)
-        self.up1 = up(1024, 256)
-        self.up2 = up(512, 128)
-        self.up3 = up(256, 64)
-        self.up4 = up(128, 64)
-        self.outc = outconv(64, n_channels)
+    def forward(self, x, g):
+        filter_x = self.filter_x(x)
+        filter_g = self.filter_g(g)
+
+        patches = F.pad(x, (4,4,4,4), "constant", 0)
+        patches = patches.unfold(2,9,1).unfold(3,9,1)
+        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
+        x_ = torch.sum(patches*filter_x, 1, keepdim=True)
+
+        patches = F.pad(g, (4,4,4,4), "constant", 0)
+        patches = patches.unfold(2,9,1).unfold(3,9,1)
+        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
+        g_ = torch.sum(patches*filter_g, 1, keepdim=True)
+
+        out = self.conv1(torch.cat((x_,g_),1))
+        return out
+
+class TPN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1_1 = nn.Sequential(
+            nn.Conv2d(3, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True)
+        )
+        self.conv1_2 = nn.Sequential(
+            nn.Conv2d(3, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True)
+        )
+        self.conv1_3 = nn.Sequential(
+            nn.Conv2d(3, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True)
+        )
+        self.conv1_4 = nn.Sequential(
+            nn.Conv2d(3, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True)
+        )
+        self.conv2_1 = nn.Sequential(
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True)
+        )
+        self.conv2_2 = nn.Sequential(
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True)
+        )
+        self.conv2_3 = nn.Sequential(
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True)
+        )
+        self.conv2_4 = nn.Sequential(
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True)
+        )
+        self.conv3_1 = nn.Sequential(
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True)
+        )
+        self.conv3_2 = nn.Sequential(
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True)
+        )
+        self.conv3_3 = nn.Sequential(
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True)
+        )
+        self.conv3_4 = nn.Sequential(
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True)
+        )
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(16, 1, 3, 1, 1),
+            nn.BatchNorm2d(1),
+            nn.Sigmoid()
+        )
 
     def forward(self, x):
-        x1 = self.inc(x)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4)
-        x = self.up1(x5, x4)
-        x = self.up2(x, x3)
-        x = self.up3(x, x2)
-        x = self.up4(x, x1)
-        out = self.outc(x)
-        return out
+        N, C, h, w = x.size()
+
+        size1 = x
+        size2 = F.interpolate(x, size=(h // 2, w // 2))
+        size4 = F.interpolate(x, size=(h // 4, w // 4))
+        size8 = F.interpolate(x, size=(h // 8, w // 8))
+
+        size1 = self.conv1_1(size1)
+        size2 = self.conv1_2(size2)
+        size4 = self.conv1_3(size4)
+        size8 = self.conv1_4(size8)
+
+        size1 = self.conv2_1(size1)
+        size2 = self.conv2_2(size2)
+        size4 = self.conv2_3(size4)
+        size8 = self.conv2_4(size8)
+
+        size1 = self.conv3_1(size1)
+        size2 = self.conv3_2(size2)
+        size4 = self.conv3_3(size4)
+        size8 = self.conv3_4(size8)
+
+        size2 = F.interpolate(size2, size=(h, w))
+        size4 = F.interpolate(size4, size=(h, w))
+        size8 = F.interpolate(size8, size=(h, w))
+
+        concat = torch.cat((size1, size2, size4, size8), 1)
+
+        return self.conv4(concat)
