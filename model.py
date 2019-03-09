@@ -60,11 +60,11 @@ class DNet(nn.Module):
                 init.constant_(m.bias, 0)
 
 class SNet_dfver1(nn.Module):
-    def __init__(self, kernel_size=9, image_channels=1):
-        super(SNet_ver1, self).__init__()
+    def __init__(self, kernel_size=3, image_channels=1):
+        super(SNet_dfver1, self).__init__()
         layers = []
-        self.conv1 = conv_layers()
-        self.conv2 = conv_layers()
+        self.conv1 = conv1_layers()
+        self.conv2 = conv1_layers()
         self.filter = dynamic_filter(image_channels=2)
 
     def forward(self, x, g):
@@ -80,8 +80,8 @@ class SNet_dfver1(nn.Module):
         return out
 
 class SNet_dfver2(nn.Module):
-    def __init__(self, kernel_size=9, image_channels=1):
-        super(SNet_ver1, self).__init__()
+    def __init__(self, kernel_size=3, image_channels=1):
+        super(SNet_dfver2, self).__init__()
         layers = []
         self.conv1 = conv2_layers()
         self.filter_x = dynamic_filter(image_channels=1)
