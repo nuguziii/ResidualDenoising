@@ -1,4 +1,4 @@
-from model import DNet, JointNet, Model
+from model import *
 from loss_model import content_loss, gan_loss
 import data_generator as dg
 from data_generator import DenoisingDataset
@@ -117,7 +117,8 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
 
         elapsed_time = time.time() - start_time
         print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss_g/n_count, elapsed_time))
-        torch.save(modelG, os.path.join(model_dir, save_name))
+        if (epoch+1)%20 == 0:
+            torch.save(modelG, os.path.join(save_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
     torch.save(modelG, os.path.join(model_dir, save_name))
 
@@ -125,12 +126,12 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0
     device = torch.device(device)
 
     print('\n')
-    print('--\t This model is pre-trained SNet saved as ',save_name )
+    print('--\t This model is pre-trained SNet with dynamic filter network saved as ',save_name )
     print('--\t epoch %4d batch_size %4d sigma %4d' % (n_epoch, batch_size, sigma))
     print('\n')
 
     DNet = torch.load(os.path.join(model_dir, model_name[0]))
-    model = JointNet(kernel_size=3) #guidance='noisy, denoised'
+    model = SNet_dfver1()
 
     DNet.eval()
     model.train()
@@ -167,7 +168,6 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0
             elif guidance is 'denoised':
                 s = model(r, d)
             #target = 1.8*(batch_original-d+0.5)-0.8
-
             loss = criterion(s, batch_original-d)
             epoch_loss += loss.item()
             loss.backward()
