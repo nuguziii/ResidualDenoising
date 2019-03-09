@@ -122,16 +122,30 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
 
     torch.save(modelG, os.path.join(model_dir, save_name))
 
-def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None, save_name=None, guidance='denoised'):
+def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None, model=0):
     device = torch.device(device)
 
+    DNet = torch.load(os.path.join(model_dir, model_name[0]))
+    if model==0:
+        model = SNet_jfver1()
+        save_name = 'SNet_jfver1'
+    elif model==1:
+        model = SNet_dfver1()
+        save_name = 'SNet_dfver1'
+    elif model==2:
+        model = SNet_dfver2()
+        save_name = 'SNet_dfver2'
+    elif model==3:
+        model = SNet_texture_ver1()
+        save_name = 'SNet_texture_ver1'
+
+    from datetime import date
+    save_name = save_name + "_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
+
     print('\n')
-    print('--\t This model is pre-trained SNet with dynamic filter network saved as ',save_name )
+    print('--\t This model is pre-trained SNet saved as ',save_name )
     print('--\t epoch %4d batch_size %4d sigma %4d' % (n_epoch, batch_size, sigma))
     print('\n')
-
-    DNet = torch.load(os.path.join(model_dir, model_name[0]))
-    model = SNet_dfver1()
 
     DNet.eval()
     model.train()
@@ -163,10 +177,7 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0
             r = DNet(batch_noise)
             d = batch_noise-r
             #r=1.55*(r+0.5)-0.8
-            if guidance is 'noisy':
-                s = model(r, batch_noise)
-            elif guidance is 'denoised':
-                s = model(r, d)
+            s = model(r, d)
             #target = 1.8*(batch_original-d+0.5)-0.8
             loss = criterion(s, batch_original-d)
             epoch_loss += loss.item()
@@ -178,7 +189,8 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0
 
         elapsed_time = time.time() - start_time
         print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
-        torch.save(model, os.path.join(model_dir, save_name))
+        if (epoch+1)%25 == 0:
+            torch.save(model, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
     torch.save(model, os.path.join(model_dir, save_name))
 
