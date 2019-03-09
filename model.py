@@ -59,6 +59,21 @@ class DNet(nn.Module):
                 init.constant_(m.weight, 1)
                 init.constant_(m.bias, 0)
 
+class SNet_jfver1(nn.Module):
+    def __init__(self, kernel_size=3, image_channels=1):
+        super(SNet_jfver1, self).__init__()
+        layers = []
+        self.convx = conv1_layers()
+        self.convg = conv1_layers()
+        self.conv2 = conv2_layers(2)
+
+    def forward(self, x, g):
+        x = self.convx(x)
+        g = self.convg(g)
+
+        out = self.conv2(torch.cat((x,g),1))
+        return out
+
 class SNet_dfver1(nn.Module):
     def __init__(self, kernel_size=3, image_channels=1):
         super(SNet_dfver1, self).__init__()
@@ -83,7 +98,7 @@ class SNet_dfver2(nn.Module):
     def __init__(self, kernel_size=3, image_channels=1):
         super(SNet_dfver2, self).__init__()
         layers = []
-        self.conv1 = conv2_layers()
+        self.conv1 = conv2_layers(2)
         self.filter_x = dynamic_filter(image_channels=1)
         self.filter_g = dynamic_filter(image_channels=1)
 
@@ -104,102 +119,17 @@ class SNet_dfver2(nn.Module):
         out = self.conv1(torch.cat((x_,g_),1))
         return out
 
-class TPN(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv1_1 = nn.Sequential(
-            nn.Conv2d(3, 16, 3, 1, 1),
-            nn.BatchNorm2d(16),
-            nn.ReLU(True)
-        )
-        self.conv1_2 = nn.Sequential(
-            nn.Conv2d(3, 16, 3, 1, 1),
-            nn.BatchNorm2d(16),
-            nn.ReLU(True)
-        )
-        self.conv1_3 = nn.Sequential(
-            nn.Conv2d(3, 16, 3, 1, 1),
-            nn.BatchNorm2d(16),
-            nn.ReLU(True)
-        )
-        self.conv1_4 = nn.Sequential(
-            nn.Conv2d(3, 16, 3, 1, 1),
-            nn.BatchNorm2d(16),
-            nn.ReLU(True)
-        )
-        self.conv2_1 = nn.Sequential(
-            nn.Conv2d(16, 8, 3, 1, 1),
-            nn.BatchNorm2d(8),
-            nn.ReLU(True)
-        )
-        self.conv2_2 = nn.Sequential(
-            nn.Conv2d(16, 8, 3, 1, 1),
-            nn.BatchNorm2d(8),
-            nn.ReLU(True)
-        )
-        self.conv2_3 = nn.Sequential(
-            nn.Conv2d(16, 8, 3, 1, 1),
-            nn.BatchNorm2d(8),
-            nn.ReLU(True)
-        )
-        self.conv2_4 = nn.Sequential(
-            nn.Conv2d(16, 8, 3, 1, 1),
-            nn.BatchNorm2d(8),
-            nn.ReLU(True)
-        )
-        self.conv3_1 = nn.Sequential(
-            nn.Conv2d(8, 4, 3, 1, 1),
-            nn.BatchNorm2d(4),
-            nn.ReLU(True)
-        )
-        self.conv3_2 = nn.Sequential(
-            nn.Conv2d(8, 4, 3, 1, 1),
-            nn.BatchNorm2d(4),
-            nn.ReLU(True)
-        )
-        self.conv3_3 = nn.Sequential(
-            nn.Conv2d(8, 4, 3, 1, 1),
-            nn.BatchNorm2d(4),
-            nn.ReLU(True)
-        )
-        self.conv3_4 = nn.Sequential(
-            nn.Conv2d(8, 4, 3, 1, 1),
-            nn.BatchNorm2d(4),
-            nn.ReLU(True)
-        )
-        self.conv4 = nn.Sequential(
-            nn.Conv2d(16, 1, 3, 1, 1),
-            nn.BatchNorm2d(1),
-            nn.Sigmoid()
-        )
+class SNet_texture_ver1(nn.Module):
+    def __init__(self, kernel_size=3, image_channels=1):
+        super(SNet_texture_ver1, self).__init__()
+        layers = []
+        self.conv1 = conv1_layers()
+        self.tpn = TPN()
+        self.conv2 = conv2_layers(2)
 
-    def forward(self, x):
-        N, C, h, w = x.size()
+    def forward(self, x, g):
+        g_ = self.conv1(g)
+        x_ = self.tpn(x)
 
-        size1 = x
-        size2 = F.interpolate(x, size=(h // 2, w // 2))
-        size4 = F.interpolate(x, size=(h // 4, w // 4))
-        size8 = F.interpolate(x, size=(h // 8, w // 8))
-
-        size1 = self.conv1_1(size1)
-        size2 = self.conv1_2(size2)
-        size4 = self.conv1_3(size4)
-        size8 = self.conv1_4(size8)
-
-        size1 = self.conv2_1(size1)
-        size2 = self.conv2_2(size2)
-        size4 = self.conv2_3(size4)
-        size8 = self.conv2_4(size8)
-
-        size1 = self.conv3_1(size1)
-        size2 = self.conv3_2(size2)
-        size4 = self.conv3_3(size4)
-        size8 = self.conv3_4(size8)
-
-        size2 = F.interpolate(size2, size=(h, w))
-        size4 = F.interpolate(size4, size=(h, w))
-        size8 = F.interpolate(size8, size=(h, w))
-
-        concat = torch.cat((size1, size2, size4, size8), 1)
-
-        return self.conv4(concat)
+        out = self.conv2(torch.cat((x_,g_),1))
+        return out
