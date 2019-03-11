@@ -7,22 +7,15 @@ import torch.nn.functional as F
 from utils import *
 
 class Model(nn.Module):
-    def __init__(self, model_dir=None, model_name=[], guidance=None, kernel_size=9):
+    def __init__(self, model_dir=None, model_name=[]):
         super(Model, self).__init__()
         self.DNet = torch.load(os.path.join(model_dir, model_name[0]))
         self.SNet = torch.load(os.path.join(model_dir, model_name[1]))
-        #self.JFNet = JointNet(kernel_size=kernel_size)
-        self.guide = guidance
 
     def forward(self, x):
         r = self.DNet(x)
         d = x-r
-
-        if self.guide is 'noisy':
-            s = self.SNet(r, x)
-        elif self.guide is 'denoised':
-            s = self.SNet(r, d)
-
+        s = self.SNet(r, d)
         out = s+d
         return out
 
