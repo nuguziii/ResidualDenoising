@@ -65,13 +65,18 @@ class perceptual_loss(_Loss):
         vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum').div_(2)
         return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
 
-def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None, save_name=None, discription=None):
+def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
     device = torch.device(device)
 
-    print('--\t', discription)
+    from datetime import date
+    save_name = model_name[1].replace("SNet", "model").replace(".pth","") + "_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
+
+    print('--\t This is end to end model saved as ', save_name)
     print('--\t epoch %4d batch_size %4d sigma %4d' % (n_epoch, batch_size, sigma))
 
-    modelG = Model(model_dir=model_dir,model_name=model_name, guidance='denoised', kernel_size=3) #guidance='noisy, denoised'
+    modelG = Model(model_dir=model_dir,model_name=model_name) #guidance='noisy, denoised'
+
+    print(modelG)
     modelD = gan_loss()
 
     modelG.train()
