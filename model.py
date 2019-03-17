@@ -17,7 +17,7 @@ class Model(nn.Module):
         d = x-r
         s = self.SNet(r, d)
         out = s+d
-        return out
+        return out, s, d
 
 class DNet(nn.Module):
     def __init__(self, depth=17, n_channels=64, image_channels=1, use_bnorm=True, kernel_size=3):
