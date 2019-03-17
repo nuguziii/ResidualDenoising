@@ -112,15 +112,14 @@ class dynamic_filter(nn.Module):
         #mid
         layers.append(nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1, bias=False))
         layers.append(nn.LeakyReLU(inplace=True))
+        layers.append(nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
+        layers.append(nn.LeakyReLU(inplace=True))
+        layers.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
+        layers.append(nn.LeakyReLU(inplace=True))
 
         self.encoder = nn.Sequential(*layers)
 
         layers2 = []
-        layers2.append(nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
-        layers2.append(nn.LeakyReLU(inplace=True))
-        layers2.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
-        layers2.append(nn.LeakyReLU(inplace=True))
-        layers2.append(nn.Upsample(scale_factor=2))
         layers2.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
         layers2.append(nn.LeakyReLU(inplace=True))
         layers2.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
@@ -135,6 +134,7 @@ class dynamic_filter(nn.Module):
 
     def forward(self, x):
         x_ = self.encoder(x)
+        x_ = nn.Upsample(size=(x.size(2),x.size(3)))(x_)
         x_ = self.decoder(x_)
         x_ = self.conv1(x_)
         filter = self.softmax(x_)
