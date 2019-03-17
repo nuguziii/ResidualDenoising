@@ -66,7 +66,7 @@ class gan_loss(nn.Module):
 
         self.gan = nn.Sequential(*layers)
 
-        self.fc1 = nn.Linear(in_features=512*3*3, out_features=1024)
+        self.fc1 = nn.Linear(in_features=512*5*5, out_features=1024)
         self.fc2 = nn.Linear(in_features=1024, out_features=1)
 
         self._initialize_weights()
