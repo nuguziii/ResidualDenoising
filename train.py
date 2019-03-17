@@ -66,8 +66,11 @@ class perceptual_loss(_Loss):
         vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum').div_(2)
         return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
 
-def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
+def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models/model', model_name=None):
     device = torch.device(device)
+
+    if not os.path.exists(model_dir):
+        os.mkdir(os.path.join(model_dir))
 
     from datetime import date
     save_name = model_name[1].replace("SNet", "model").replace(".pth","") + "_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
@@ -135,8 +138,10 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
 
     torch.save(modelG, os.path.join(model_dir, save_name))
 
-def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None, model=0):
+def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models/SNet', model_name=None, model=0):
     device = torch.device(device)
+    if not os.path.exists(model_dir):
+        os.mkdir(os.path.join(model_dir))
 
     DNet = torch.load(os.path.join(model_dir, model_name[0]))
     if model==0:
@@ -207,8 +212,14 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0
 
     torch.save(model, os.path.join(model_dir, save_name))
 
-def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, device="cuda:0", data_dir='./data/Train400', model_dir='models', save_name=None):
+def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, device="cuda:0", data_dir='./data/Train400', model_dir='models/DNet'):
     device = torch.device(device)
+
+    if not os.path.exists(model_dir):
+        os.mkdir(os.path.join(model_dir))
+
+    from datetime import date
+    save_name = "DNet_s"+str(sigma)+"d"+str(depth)+"_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
 
     print('\n')
     print('--\t This model is pre-trained DNet saved as ',save_name )
@@ -256,7 +267,8 @@ def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, devi
 
         elapsed_time = time.time() - start_time
         print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
-        torch.save(model, os.path.join(model_dir, save_name))
+        if (epoch+1)%1 == 0:
+            torch.save(model, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
     torch.save(model, os.path.join(model_dir, save_name))
 if __name__ == '__main__':
