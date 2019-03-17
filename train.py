@@ -12,6 +12,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.nn.modules.loss import _Loss
 from torch.autograd import Variable
+import random
 
 class sum_squared_error(_Loss):  # PyTorch 0.4.1
     """
@@ -84,6 +85,7 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
 
     criterionG = perceptual_loss(device)
     criterionD = discriminator_loss()
+    criterionS = sum_squared_error()
 
     if torch.cuda.is_available():
         modelG.to(device)
@@ -106,24 +108,30 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
                 batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
 
             modelD.zero_grad()
-            fake = modelD(modelG(batch_noise))
+            fake = modelD(modelG(batch_noise)[0])
             d_loss = criterionD(fake, modelD(batch_original))
             d_loss.backward(retain_graph=True)
             optimizerD.step()
 
             modelG.zero_grad()
-            g_loss = criterionG(modelG(batch_noise), batch_original, fake)
+            denoised, structure, d = modelG(batch_noise)
+
+            s_loss = criterionS(structure, batch_original-d)
+            s_loss.backward(retain_graph=True)
+            optimizerG.step()
+
+            g_loss = criterionG(denoised, batch_original, fake)
             epoch_loss_g += g_loss.item()
             g_loss.backward()
             optimizerG.step()
             if cnt%100 == 0:
-                print('%4d %4d / %4d g_loss = %2.4f\t(d_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, d_loss.item()/batch_size))
+                print('%4d %4d / %4d g_loss = %2.4f\t(d_loss = %2.4f, s_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, d_loss.item()/batch_size, s_loss.item()/batch_size))
             n_count +=1
 
         elapsed_time = time.time() - start_time
         print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss_g/n_count, elapsed_time))
         if (epoch+1)%20 == 0:
-            torch.save(modelG, os.path.join(save_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
+            torch.save(modelG, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
     torch.save(modelG, os.path.join(model_dir, save_name))
 
@@ -194,7 +202,7 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0
 
         elapsed_time = time.time() - start_time
         print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
-        if (epoch+1)%25 == 0:
+        if (epoch+1)%1 == 0:
             torch.save(model, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
     torch.save(model, os.path.join(model_dir, save_name))
@@ -224,7 +232,10 @@ def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, devi
     for epoch in range(n_epoch):
         x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
         x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
+
+        dataset=None
         dataset = DenoisingDataset(x, sigma)
+
         loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
         epoch_loss = 0
         start_time = time.time()
@@ -232,7 +243,7 @@ def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, devi
         for cnt, batch_yx in enumerate(loader):
             optimizer.zero_grad()
             if torch.cuda.is_available():
-                batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
+                batch_original, batch_noise= batch_yx[1].to(device), batch_yx[0].to(device)
 
             r = model(batch_noise)
             loss = criterion(batch_noise-r, batch_original)
