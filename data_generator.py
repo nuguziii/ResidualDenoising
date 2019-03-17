@@ -26,7 +26,7 @@ import numpy as np
 from torch.utils.data import Dataset
 import torch
 
-patch_size, stride = 40, 10
+patch_size, stride = 80, 10
 aug_times = 1
 scales = [1, 0.9, 0.8, 0.7]
 batch_size = 128
@@ -45,7 +45,11 @@ class DenoisingDataset(Dataset):
 
     def __getitem__(self, index):
         batch_x = self.xs[index]
-        noise = torch.randn(batch_x.size()).mul_(self.sigma/255.0)
+        if self.sigma==0:
+            sig=torch.randint(0,50, size=(batch_x.size(0),),dtype=batch_x.dtype)
+        else:
+            sig=self.sigma
+        noise = torch.randn(batch_x.size()).mul_(sig/255.0)
         batch_y = batch_x + noise
         return batch_y, batch_x
 
