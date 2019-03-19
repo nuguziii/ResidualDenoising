@@ -10,7 +10,16 @@ class Model(nn.Module):
     def __init__(self, model_dir=None, model_name=[]):
         super(Model, self).__init__()
         self.DNet = torch.load(os.path.join(model_dir, model_name[0]))
-        self.SNet = torch.load(os.path.join(model_dir, model_name[1]))
+        if model_name[1]==0:
+            self.SNet = SNet_jfver1()
+        elif model_name[1]==1:
+            self.SNet = SNet_dfver1()
+        elif model_name[1]==2:
+            self.SNet = SNet_dfver2()
+        elif model_name[1]==3:
+            self.SNet = SNet_texture_ver1()
+        elif model_name[1]==4:
+            self.SNet = SNet_texture_ver2()
 
     def forward(self, x):
         r = self.DNet(x)
@@ -140,7 +149,7 @@ class SNet_texture_ver2(nn.Module):
 
         self.conv1 = conv1_layers()
         self.tpn = TPN()
-        self.conv2 = conv2_layers(17)
+        self.conv2 = conv2_layers(5)
 
     def forward(self, x, g):
         N, C, h, w = x.size()
@@ -159,27 +168,27 @@ class SNet_texture_ver2(nn.Module):
 
         patches = F.pad(size1, (4,4,4,4), "constant", 0)
         patches = patches.unfold(2,9,1).unfold(3,9,1)
-        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
+        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,size1.size(2),size1.size(3))
         size1 = torch.sum(patches*f1, 1, keepdim=True)
 
         patches = F.pad(size2, (4,4,4,4), "constant", 0)
         patches = patches.unfold(2,9,1).unfold(3,9,1)
-        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
+        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,size2.size(2),size2.size(3))
         size2 = torch.sum(patches*f2, 1, keepdim=True)
 
         patches = F.pad(size4, (4,4,4,4), "constant", 0)
         patches = patches.unfold(2,9,1).unfold(3,9,1)
-        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
-        size4 = torch.sum(patches*f3, 1, keepdim=True)
+        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,size4.size(2),size4.size(3))
+        size4 = torch.sum(patches*f4, 1, keepdim=True)
 
         patches = F.pad(size8, (4,4,4,4), "constant", 0)
         patches = patches.unfold(2,9,1).unfold(3,9,1)
-        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
-        size8 = torch.sum(patches*f4, 1, keepdim=True)
+        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,size8.size(2),size8.size(3))
+        size8 = torch.sum(patches*f8, 1, keepdim=True)
 
         patches = F.pad(g, (4,4,4,4), "constant", 0)
         patches = patches.unfold(2,9,1).unfold(3,9,1)
-        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
+        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,g.size(2),g.size(3))
         g = torch.sum(patches*g_, 1, keepdim=True)
 
         size2 = F.interpolate(size2, size=(h, w))
