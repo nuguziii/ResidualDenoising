@@ -69,18 +69,23 @@ class perceptual_loss(_Loss):
 def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models/model', model_name=None):
     device = torch.device(device)
 
-    if not os.path.exists(model_dir):
-        os.mkdir(os.path.join(model_dir))
+    if not os.path.exists(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1]))):
+        os.mkdir(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1])))
 
     from datetime import date
-    save_name = model_name[1].replace("SNet", "model").replace(".pth","") + "_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
+    save_name = "model_mode" + str(model_name[1])+"_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
 
-    print('--\t This is end to end model saved as ', save_name)
-    print('--\t epoch %4d batch_size %4d sigma %4d' % (n_epoch, batch_size, sigma))
+    f = open(os.path.join(model_dir,save_name.replace(".pth",".txt")),'w')
+
+    f.write(('--\t This is end to end model saved as '+ save_name+'\n'))
+    f.write(('--\t epoch %4d batch_size %4d sigma %4d\n' % (n_epoch, batch_size, sigma)))
+    f.write(model_name[0])
 
     modelG = Model(model_dir=model_dir,model_name=model_name) #guidance='noisy, denoised'
 
     print(modelG)
+    f.write(str(modelG))
+    f.write('\n\n')
     modelD = gan_loss()
 
     modelG.train()
@@ -128,15 +133,22 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
             g_loss.backward()
             optimizerG.step()
             if cnt%100 == 0:
-                print('%4d %4d / %4d g_loss = %2.4f\t(d_loss = %2.4f, s_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, d_loss.item()/batch_size, s_loss.item()/batch_size))
+                line = '%4d %4d / %4d g_loss = %2.4f\t(d_loss = %2.4f, s_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, d_loss.item()/batch_size, s_loss.item()/batch_size)
+                print(line)
+                f.write(line)
+                f.write('\n')
             n_count +=1
 
         elapsed_time = time.time() - start_time
-        print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss_g/n_count, elapsed_time))
+        line = 'epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss_g/n_count, elapsed_time)
+        print(line)
+        f.write(line)
+        f.write('\n')
         if (epoch+1)%20 == 0:
             torch.save(modelG, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
     torch.save(modelG, os.path.join(model_dir, save_name))
+    f.close()
 
 def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models/SNet', model_name=None, model=0):
     device = torch.device(device)
@@ -159,6 +171,8 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0
 
     from datetime import date
     save_name = save_name + "_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
+
+    f = open(os.path.join(model_dir,save_name.replace(".pth",".txt")),'w')
 
     print('\n')
     print('--\t This model is pre-trained SNet saved as ',save_name )
@@ -202,15 +216,20 @@ def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0
             loss.backward()
             optimizer.step()
             if cnt%100 == 0:
-                print('%4d %4d / %4d loss = %2.4f' % (epoch+1, cnt, x.size(0)//batch_size, loss.item()/batch_size))
+                line = '%4d %4d / %4d loss = %2.4f' % (epoch+1, cnt, x.size(0)//batch_size, loss.item()/batch_size)
+                print(line)
+                f.write(line)
             n_count +=1
 
         elapsed_time = time.time() - start_time
-        print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
+        line = 'epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time)
+        print(line)
+        f.write(line)
         if (epoch+1)%1 == 0:
             torch.save(model, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
     torch.save(model, os.path.join(model_dir, save_name))
+    f.close()
 
 def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, device="cuda:0", data_dir='./data/Train400', model_dir='models'):
     device = torch.device(device)
