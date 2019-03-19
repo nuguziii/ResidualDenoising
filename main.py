@@ -1,5 +1,4 @@
-from train import pretrain_SNet, pretrain_DNet
+from train import *
 
 if __name__ == '__main__':
-    pretrain_DNet(device="cuda:0", save_name='DNet(sigma=25)_1.pth')
-    pretrain_DNet(depth=7, device="cuda:0", save_name='DNet(sigma=25)_2.pth')
+    train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", model_name=['DNet(sigma=25)_1.pth', 4])
