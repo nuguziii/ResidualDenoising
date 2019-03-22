@@ -71,8 +71,6 @@ class discriminator(nn.Module):
 
         self.sig = nn.Sigmoid()
 
-        self._initialize_weights()
-
     def forward(self, x):
         x = self.gan(x)
         x = x.view(x.size(0), -1)
@@ -80,19 +78,3 @@ class discriminator(nn.Module):
         x = self.fc2(x)
         out = self.sig(x)
         return out
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                init.orthogonal_(m.weight)
-                print('init weight')
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                init.xavier_uniform(m.weight)
-                print('init weight')
-                if m.bias is not None:
-                    m.bias.data.fill_(0.01)
