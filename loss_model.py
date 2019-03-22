@@ -28,9 +28,9 @@ class content_loss(torch.nn.Module):
         vgg54 = h
         return vgg22, vgg54
 
-class gan_loss(nn.Module):
+class discriminator(nn.Module):
     def __init__(self, image_channels=1, w=40):
-        super(gan_loss, self).__init__()
+        super(discriminator, self).__init__()
         layers = []
 
         layers.append(nn.Conv2d(in_channels=image_channels, out_channels=64, kernel_size=3, stride=1, padding=1, bias=True))
@@ -69,13 +69,16 @@ class gan_loss(nn.Module):
         self.fc1 = nn.Linear(in_features=512*5*5, out_features=1024)
         self.fc2 = nn.Linear(in_features=1024, out_features=1)
 
+        self.sig = nn.Sigmoid()
+
         self._initialize_weights()
 
     def forward(self, x):
         x = self.gan(x)
         x = x.view(x.size(0), -1)
         x = self.fc1(x)
-        out = self.fc2(x)
+        x = self.fc2(x)
+        out = self.sig(x)
         return out
 
     def _initialize_weights(self):
