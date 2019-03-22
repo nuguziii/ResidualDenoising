@@ -66,7 +66,7 @@ class perceptual_loss(_Loss):
         vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum').div_(2)
         #return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
         return mse_loss, gan_loss, vgg_loss
-
+'''
 def initialize_weights(self):
     for m in self.modules():
         if isinstance(m, nn.Conv2d):
@@ -81,8 +81,17 @@ def initialize_weights(self):
             init.xavier_uniform(m.weight)
             print('init weight')
             if m.bias is not None:
-                m.bias.data.fill_(0.01)
-
+                m.bias.data.fill_(0.01)'
+'''
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+        print('init conv')
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
+        print('init bn')
 
 def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
     device = torch.device(device)
@@ -109,7 +118,7 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
     if (device.type == 'cuda') and (ngpu > 1):
         modelG = nn.DataParallel(modelG, list(range(ngpu)))
 
-    modelG.apply(initialize_weights)
+    modelG.apply(weights_init)
 
     '''
     modelD = discriminator()
