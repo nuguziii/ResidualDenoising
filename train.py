@@ -64,7 +64,25 @@ class perceptual_loss(_Loss):
         mse_loss = torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum').div_(2)
         gan_loss = errG
         vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum').div_(2)
-        return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
+        #return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
+        return mse_loss, gan_loss, vgg_loss
+
+def initialize_weights(self):
+    for m in self.modules():
+        if isinstance(m, nn.Conv2d):
+            init.orthogonal_(m.weight)
+            print('init weight')
+            if m.bias is not None:
+                init.constant_(m.bias, 0)
+        elif isinstance(m, nn.BatchNorm2d):
+            init.constant_(m.weight, 1)
+            init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Linear):
+            init.xavier_uniform(m.weight)
+            print('init weight')
+            if m.bias is not None:
+                m.bias.data.fill_(0.01)
+
 
 def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
     device = torch.device(device)
@@ -86,10 +104,19 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
     print(modelG)
     f.write(str(modelG))
     f.write('\n\n')
-    modelD = discriminator()
 
-    modelG.train()
-    modelD.train()
+    ngpu = 2
+    if (device.type == 'cuda') and (ngpu > 1):
+        modelG = nn.DataParallel(modelG, list(range(ngpu)))
+
+    modelG.apply(initialize_weights)
+
+    '''
+    modelD = discriminator()
+    if (device.type == 'cuda') and (ngpu > 1):
+        modelD = nn.DataParallel(modelD, list(range(ngpu)))
+    modelD.apply(initialize_weights)
+    '''
 
     criterionG = perceptual_loss(device)
     criterion = nn.BCELoss()
@@ -97,10 +124,10 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
 
     if torch.cuda.is_available():
         modelG.to(device)
-        modelD.to(device)
+        #modelD.to(device)
 
     optimizerG = optim.Adam(modelG.parameters(), lr=lr, betas=(0.5, 0.999),  weight_decay=1e-5)
-    optimizerD = optim.Adam(modelD.parameters(), lr=lr, betas=(0.5, 0.999), weight_decay=1e-5)
+    #optimizerD = optim.Adam(modelD.parameters(), lr=lr, betas=(0.5, 0.999), weight_decay=1e-5)
     scheduler = MultiStepLR(optimizerG, milestones=[30, 60, 90], gamma=0.2)  # learning rates
 
     for epoch in range(n_epoch):
@@ -114,7 +141,7 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
         for cnt, batch_yx in enumerate(loader):
             if torch.cuda.is_available():
                 batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
-
+            '''
             modelD.zero_grad()
             b_size = batch_original.size(0)
             label = torch.full((b_size,), 1, device=device)
@@ -130,29 +157,32 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
 
             d_loss = errD_real + errD_fake
             optimizerD.step()
-
+            '''
             modelG.zero_grad()
-            label.fill_(1)
-            output = modelD(fake).view(-1)
-            errG = criterion(output, label)
+            fake, structure, denoised = modelG(batch_noise)
+            label = torch.full((batch_original.size(0),), 1, device=device)
+            #output = modelD(fake).view(-1)
+            #errG = criterion(output, label)
 
             s_loss = criterionS(structure, batch_original-denoised)
             s_loss.backward(retain_graph=True)
 
-            g_loss = criterionG(fake, batch_original, errG)
-            epoch_loss_g += g_loss.item()
+            mse_loss, gan_loss, vgg_loss= criterionG(fake, batch_original, 0)
+            g_loss = mse_loss+2e-4*vgg_loss
             g_loss.backward(retain_graph=True)
+            epoch_loss_g += g_loss.item()
             optimizerG.step()
 
             if cnt%100 == 0:
-                line = '%4d %4d / %4d g_loss = %2.4f\t(d_loss = %2.4f, s_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, d_loss.item()/batch_size, s_loss.item()/batch_size)
+                line = '%4d %4d / %4d g_loss = %2.4f\t(s_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size)
                 print(line)
+                print("mse_loss=%4d / vgg_loss=%4d" % (mse_loss.item()/batch_size, vgg_loss.item()/batch_size))
                 f.write(line)
                 f.write('\n')
             n_count +=1
 
         elapsed_time = time.time() - start_time
-        line = 'epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss_g/n_count, elapsed_time)
+        line = 'epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss_g/(n_count*batch_size), elapsed_time)
         print(line)
         f.write(line)
         f.write('\n')
