@@ -44,22 +44,9 @@ class DNet(nn.Module):
         d_layers.append(nn.Conv2d(in_channels=n_channels, out_channels=image_channels, kernel_size=kernel_size, padding=padding, bias=False))
         self.dncnn = nn.Sequential(*d_layers)
 
-        self._initialize_weights()
-
     def forward(self, x):
         out = self.dncnn(x)
         return out
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                init.orthogonal_(m.weight)
-                print('init weight')
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias, 0)
 
 class SNet_jfver1(nn.Module):
     def __init__(self, kernel_size=3, image_channels=1):
