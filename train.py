@@ -1,5 +1,5 @@
 from model import *
-from loss_model import content_loss, gan_loss
+from loss_model import *
 import data_generator as dg
 from data_generator import DenoisingDataset
 
@@ -60,9 +60,9 @@ class perceptual_loss(_Loss):
         if torch.cuda.is_available():
             self.vgg = self.vgg.to(device)
 
-    def forward(self, input, target, fake):
+    def forward(self, input, target, errG):
         mse_loss = torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum').div_(2)
-        gan_loss = generator_loss(fake)
+        gan_loss = errG
         vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum').div_(2)
         return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
 
@@ -86,21 +86,21 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
     print(modelG)
     f.write(str(modelG))
     f.write('\n\n')
-    modelD = gan_loss()
+    modelD = discriminator()
 
     modelG.train()
     modelD.train()
 
     criterionG = perceptual_loss(device)
-    criterionD = discriminator_loss()
+    criterion = nn.BCELoss()
     criterionS = sum_squared_error()
 
     if torch.cuda.is_available():
         modelG.to(device)
         modelD.to(device)
 
-    optimizerG = optim.Adam(modelG.parameters(), lr=lr, weight_decay=1e-5)
-    optimizerD = optim.Adam(modelD.parameters(), lr=lr, weight_decay=1e-5)
+    optimizerG = optim.Adam(modelG.parameters(), lr=lr, betas=(0.5, 0.999),  weight_decay=1e-5)
+    optimizerD = optim.Adam(modelD.parameters(), lr=lr, betas=(0.5, 0.999), weight_decay=1e-5)
     scheduler = MultiStepLR(optimizerG, milestones=[30, 60, 90], gamma=0.2)  # learning rates
 
     for epoch in range(n_epoch):
@@ -116,22 +116,34 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
                 batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
 
             modelD.zero_grad()
-            fake = modelD(modelG(batch_noise)[0])
-            d_loss = criterionD(fake, modelD(batch_original))
-            d_loss.backward(retain_graph=True)
+            b_size = batch_original.size(0)
+            label = torch.full((b_size,), 1, device=device)
+            output = modelD(batch_original).view(-1)
+            errD_real = criterion(output, label)
+            errD_real.backward(retain_graph=True)
+
+            fake, structure, denoised = modelG(batch_noise)
+            label.fill_(0)
+            output = modelD(fake.detach()).view(-1)
+            errD_fake = criterion(output, label)
+            errD_fake.backward(retain_graph=True)
+
+            d_loss = errD_real + errD_fake
             optimizerD.step()
 
             modelG.zero_grad()
-            denoised, structure, d = modelG(batch_noise)
+            label.fill_(1)
+            output = modelD(fake).view(-1)
+            errG = criterion(output, label)
 
-            s_loss = criterionS(structure, batch_original-d)
+            s_loss = criterionS(structure, batch_original-denoised)
             s_loss.backward(retain_graph=True)
+
+            g_loss = criterionG(fake, batch_original, errG)
+            epoch_loss_g += g_loss.item()
+            g_loss.backward(retain_graph=True)
             optimizerG.step()
 
-            g_loss = criterionG(denoised, batch_original, fake)
-            epoch_loss_g += g_loss.item()
-            g_loss.backward()
-            optimizerG.step()
             if cnt%100 == 0:
                 line = '%4d %4d / %4d g_loss = %2.4f\t(d_loss = %2.4f, s_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, d_loss.item()/batch_size, s_loss.item()/batch_size)
                 print(line)
