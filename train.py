@@ -66,7 +66,7 @@ class perceptual_loss(_Loss):
         vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum').div_(2)
         return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
 
-def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models/model', model_name=None):
+def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
     device = torch.device(device)
 
     if not os.path.exists(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1]))):
