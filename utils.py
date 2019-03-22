@@ -20,22 +20,10 @@ class conv1_layers(nn.Module):
 
         self.feat = nn.Sequential(*f_layers)
 
-        self._initialize_weights()
-
     def forward(self, x):
         x = self.feat(x)
         return x
 
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                init.orthogonal_(m.weight)
-                print('init weight')
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias, 0)
 
 class conv2_layers(nn.Module):
     def __init__(self, in_channels=1, out_channels=1):
@@ -51,22 +39,10 @@ class conv2_layers(nn.Module):
 
         self.conv = nn.Sequential(*layers)
 
-        self._initialize_weights()
-
     def forward(self, x):
         x = self.conv(x)
         return x
 
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                init.orthogonal_(m.weight)
-                print('init weight')
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias, 0)
 
 class UNet(nn.Module):
     def __init__(self, n_channels):
