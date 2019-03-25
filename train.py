@@ -62,6 +62,7 @@ class perceptual_loss(_Loss):
 
     def forward(self, input, target, errG):
         mse_loss = torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum')
+        #mse_loss = torch.nn.functional.l1_loss(input, target)
         gan_loss = errG
         vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum')
         #return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
@@ -93,16 +94,18 @@ def weights_init(m):
         nn.init.constant_(m.bias.data, 0)
         print('init bn')
 
-def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
+def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-3, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
     device = torch.device(device)
 
     if not os.path.exists(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1]))):
         os.mkdir(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1])))
 
+    save_dir = os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1]))
+
     from datetime import date
     save_name = "model_mode" + str(model_name[1])+"_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
 
-    f = open(os.path.join(model_dir,save_name.replace(".pth",".txt")),'w')
+    f = open(os.path.join(save_dir,save_name.replace(".pth",".txt")),'w')
 
     f.write(('--\t This is end to end model saved as '+ save_name+'\n'))
     f.write(('--\t epoch %4d batch_size %4d sigma %4d\n' % (n_epoch, batch_size, sigma)))
@@ -139,66 +142,71 @@ def train(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_
     #optimizerD = optim.Adam(modelD.parameters(), lr=lr, betas=(0.5, 0.999), weight_decay=1e-5)
     scheduler = MultiStepLR(optimizerG, milestones=[30, 60, 90], gamma=0.2)  # learning rates
 
+    if sigma==0:
+        sigma_list = [5,10,15,20,25,30,35,40,45,50,55,60,65,70]
+    else:
+        sigma_list = [sigma]
+
     for epoch in range(n_epoch):
-        x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
-        x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
-        dataset = DenoisingDataset(x, sigma)
-        loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
-        epoch_loss_g = 0
-        start_time = time.time()
-        n_count=0
-        for cnt, batch_yx in enumerate(loader):
-            if torch.cuda.is_available():
-                batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
-            '''
-            modelD.zero_grad()
-            b_size = batch_original.size(0)
-            label = torch.full((b_size,), 1, device=device)
-            output = modelD(batch_original).view(-1)
-            errD_real = criterion(output, label)
-            errD_real.backward(retain_graph=True)
+        for sig in sigma_list:
+            x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
+            x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
+            dataset = DenoisingDataset(x, sigma=sig)
+            loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
+            epoch_loss_g = 0
+            start_time = time.time()
+            n_count=0
+            for cnt, batch_yx in enumerate(loader):
+                if torch.cuda.is_available():
+                    batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
+                '''
+                modelD.zero_grad()
+                b_size = batch_original.size(0)
+                label = torch.full((b_size,), 1, device=device)
+                output = modelD(batch_original).view(-1)
+                errD_real = criterion(output, label)
+                errD_real.backward(retain_graph=True)
 
-            fake, structure, denoised = modelG(batch_noise)
-            label.fill_(0)
-            output = modelD(fake.detach()).view(-1)
-            errD_fake = criterion(output, label)
-            errD_fake.backward(retain_graph=True)
+                fake, structure, denoised = modelG(batch_noise)
+                label.fill_(0)
+                output = modelD(fake.detach()).view(-1)
+                errD_fake = criterion(output, label)
+                errD_fake.backward(retain_graph=True)
 
-            d_loss = errD_real + errD_fake
-            optimizerD.step()
-            '''
-            modelG.zero_grad()
-            fake, structure, denoised = modelG(batch_noise)
-            label = torch.full((batch_original.size(0),), 1, device=device)
-            #output = modelD(fake).view(-1)
-            #errG = criterion(output, label)
+                d_loss = errD_real + errD_fake
+                optimizerD.step()
+                '''
+                modelG.zero_grad()
+                fake, structure, denoised = modelG(batch_noise)
+                label = torch.full((batch_original.size(0),), 1, device=device)
+                #output = modelD(fake).view(-1)
+                #errG = criterion(output, label)
 
-            s_loss = criterionS(structure, batch_original-denoised)
-            s_loss.backward(retain_graph=True)
+                s_loss = criterionS(structure, batch_original-denoised)
+                s_loss.backward(retain_graph=True)
 
-            mse_loss, gan_loss, vgg_loss= criterionG(fake, batch_original, 0)
-            g_loss = mse_loss+2e-4*vgg_loss
-            g_loss.backward(retain_graph=True)
-            epoch_loss_g += g_loss.item()
-            optimizerG.step()
+                mse_loss, gan_loss, vgg_loss= criterionG(fake, batch_original, 0)
+                g_loss = mse_loss+2e-2*vgg_loss
+                g_loss.backward(retain_graph=True)
+                epoch_loss_g += g_loss.item()
+                optimizerG.step()
 
-            if cnt%100 == 0:
-                line = '%4d %4d / %4d g_loss = %2.4f\t(s_loss = %2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size)
-                print(line)
-                print("mse_loss=%4d / vgg_loss=%4d" % (mse_loss.item()/batch_size, vgg_loss.item()/batch_size))
-                f.write(line)
-                f.write('\n')
-            n_count +=1
+                if cnt%100 == 0:
+                    line = '%4d %4d / %4d g_loss = %2.4f\t(s_loss = %2.4f / mse_loss=%4d / vgg_loss=%4d)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size, mse_loss.item()/batch_size, vgg_loss.item()/batch_size)
+                    print(line)
+                    f.write(line)
+                    f.write('\n')
+                n_count +=1
 
-        elapsed_time = time.time() - start_time
-        line = 'epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss_g/(n_count*batch_size), elapsed_time)
-        print(line)
-        f.write(line)
-        f.write('\n')
-        if (epoch+1)%20 == 0:
-            torch.save(modelG, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
+            elapsed_time = time.time() - start_time
+            line = 'epoch = %4d, sigma = %4d, loss = %4.4f , time = %4.2f s' % (epoch+1, sig, epoch_loss_g/(n_count*batch_size), elapsed_time)
+            print(line)
+            f.write(line)
+            f.write('\n')
+            if (epoch+1)%20 == 0:
+                torch.save(modelG, os.path.join(save_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
-    torch.save(modelG, os.path.join(model_dir, save_name))
+    torch.save(modelG, os.path.join(save_dir, save_name))
     f.close()
 
 def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models/SNet', model_name=None, model=0):
@@ -311,35 +319,42 @@ def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, devi
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
     scheduler = MultiStepLR(optimizer, milestones=[30, 60, 90], gamma=0.2)  # learning rates
+
+    if sigma==0:
+        sigma_list = [5,10,15,20,25,30,35,40,45,50,55,60,65,70]
+    else:
+        sigma_list = [sigma]
+
     for epoch in range(n_epoch):
-        x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
-        x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
+        for sig in sigma_list:
+            x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
+            x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
 
-        dataset=None
-        dataset = DenoisingDataset(x, sigma)
+            dataset=None
+            dataset = DenoisingDataset(x, sigma)
 
-        loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
-        epoch_loss = 0
-        start_time = time.time()
-        n_count=0
-        for cnt, batch_yx in enumerate(loader):
-            optimizer.zero_grad()
-            if torch.cuda.is_available():
-                batch_original, batch_noise= batch_yx[1].to(device), batch_yx[0].to(device)
+            loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
+            epoch_loss = 0
+            start_time = time.time()
+            n_count=0
+            for cnt, batch_yx in enumerate(loader):
+                optimizer.zero_grad()
+                if torch.cuda.is_available():
+                    batch_original, batch_noise= batch_yx[1].to(device), batch_yx[0].to(device)
 
-            r = model(batch_noise)
-            loss = criterion(batch_noise-r, batch_original)
-            epoch_loss += loss.item()
-            loss.backward()
-            optimizer.step()
-            if cnt%100 == 0:
-                print('%4d %4d / %4d loss = %2.4f' % (epoch+1, cnt, x.size(0)//batch_size, loss.item()/batch_size))
-            n_count +=1
+                r = model(batch_noise)
+                loss = criterion(batch_noise-r, batch_original)
+                epoch_loss += loss.item()
+                loss.backward()
+                optimizer.step()
+                if cnt%100 == 0:
+                    print('%4d %4d / %4d loss = %2.4f' % (epoch+1, cnt, x.size(0)//batch_size, loss.item()/batch_size))
+                n_count +=1
 
-        elapsed_time = time.time() - start_time
-        print('epoch = %4d , loss = %4.4f , time = %4.2f s' % (epoch+1, epoch_loss/n_count, elapsed_time))
-        if (epoch+1)%10 == 0:
-            torch.save(model, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
+            elapsed_time = time.time() - start_time
+            print('epoch = %4d , sigma = %4d, loss = %4.4f , time = %4.2f s' % (epoch+1, sig, epoch_loss/n_count, elapsed_time))
+            if (epoch+1)%10 == 0:
+                torch.save(model, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
     torch.save(model, os.path.join(model_dir, save_name))
 if __name__ == '__main__':
