@@ -24,7 +24,7 @@ class sum_squared_error(_Loss):  # PyTorch 0.4.1
 
     def forward(self, input, target):
         # return torch.sum(torch.pow(input-target,2), (0,1,2,3)).div_(2)
-        return torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum').div_(2)
+        return torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum')
 
 def bce_loss(input, target):
     neg_abs = - input.abs()
@@ -61,9 +61,9 @@ class perceptual_loss(_Loss):
             self.vgg = self.vgg.to(device)
 
     def forward(self, input, target, errG):
-        mse_loss = torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum').div_(2)
+        mse_loss = torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum')
         gan_loss = errG
-        vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum').div_(2)
+        vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum')
         #return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
         return mse_loss, gan_loss, vgg_loss
 '''
