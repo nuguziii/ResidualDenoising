@@ -49,24 +49,21 @@ def generator_loss(input):
     loss = bce_loss(input, true_labels)
     return loss
 
-class perceptual_loss(_Loss):
+class vgg_loss(_Loss):
     """
     Definition: perceptual_loss = vgg loss + gan loss + mse loss
     The backward is defined as: input-target
     """
     def __init__(self, size_average=None, reduce=None, reduction='sum', device="cuda:0"):
-        super(perceptual_loss, self).__init__(size_average, reduce, reduction)
+        super(vgg_loss, self).__init__(size_average, reduce, reduction)
         self.vgg = content_loss()
         if torch.cuda.is_available():
             self.vgg = self.vgg.to(device)
 
     def forward(self, input, target, errG):
-        mse_loss = torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum')
-        #mse_loss = torch.nn.functional.l1_loss(input, target)
-        gan_loss = errG
         vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum')
         #return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
-        return mse_loss, gan_loss, vgg_loss
+        return vgg_loss
 '''
 def initialize_weights(self):
     for m in self.modules():
@@ -94,7 +91,7 @@ def weights_init(m):
         nn.init.constant_(m.bias.data, 0)
         print('init bn')
 
-def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-3, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
+def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
     device = torch.device(device)
 
     if not os.path.exists(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1]))):
@@ -130,9 +127,10 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-3, device="cuda:0", data_
     modelD.apply(initialize_weights)
     '''
 
-    criterionG = perceptual_loss(device)
-    criterion = nn.BCELoss()
-    criterionS = sum_squared_error()
+    criterion_perceptual = vgg_loss(device)
+    criterion_l1 = nn.L1Loss(size_average=False, reduction='sum')
+    criterion_bce = nn.BCELoss()
+    criterion_l2 = sum_squared_error()
 
     if torch.cuda.is_available():
         modelG.to(device)
@@ -180,19 +178,22 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-3, device="cuda:0", data_
                 fake, structure, denoised = modelG(batch_noise)
                 label = torch.full((batch_original.size(0),), 1, device=device)
                 #output = modelD(fake).view(-1)
-                #errG = criterion(output, label)
+                #errG = criterion_bce(output, label)
 
-                s_loss = criterionS(structure, batch_original-denoised)
+                s_loss = criterion_l2(structure, batch_original-denoised)
                 s_loss.backward(retain_graph=True)
 
-                mse_loss, gan_loss, vgg_loss= criterionG(fake, batch_original, 0)
-                g_loss = mse_loss+2e-2*vgg_loss
+                l1_loss = criterion_l1(fake, batch_original)
+                perceptual_loss = criterion_perceptual(fake, batch_original, 0)
+                #l2_loss = criterion_l2(fake, batch_original)
+
+                g_loss = l1_loss+2e-2*perceptual_loss
                 g_loss.backward(retain_graph=True)
                 epoch_loss_g += g_loss.item()
                 optimizerG.step()
 
                 if cnt%100 == 0:
-                    line = '%4d %4d / %4d g_loss = %2.4f\t(s_loss = %2.4f / mse_loss=%4d / vgg_loss=%4d)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size, mse_loss.item()/batch_size, vgg_loss.item()/batch_size)
+                    line = '%4d %4d / %4d g_loss = %2.4f\t(snet_l2_loss = %2.4f / l1_loss=%4d / perceptual_loss=%4d)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size, l1_loss.item()/batch_size, perceptual_loss.item()/batch_size)
                     print(line)
                     f.write(line)
                     f.write('\n')
