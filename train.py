@@ -25,30 +25,7 @@ class sum_squared_error(_Loss):  # PyTorch 0.4.1
     def forward(self, input, target):
         # return torch.sum(torch.pow(input-target,2), (0,1,2,3)).div_(2)
         return torch.nn.functional.mse_loss(input, target, size_average=None, reduce=None, reduction='sum')
-'''
-def bce_loss(input, target):
-    neg_abs = - input.abs()
-    loss = input.clamp(min=0) - input * target + (1 + neg_abs.exp()).log()
-    return loss.mean()
 
-class discriminator_loss(_Loss):  # PyTorch 0.4.1
-    def __init__(self, size_average=None, reduce=None, reduction='sum'):
-        super(discriminator_loss, self).__init__(size_average, reduce, reduction)
-
-    def forward(self, input, target):
-        N = target.size()
-        true_labels = Variable(torch.ones(N)).type(input.type())
-        real_image_loss = bce_loss(target, true_labels)
-        fake_image_loss = bce_loss(input, 1 - true_labels)
-        loss = real_image_loss + fake_image_loss
-        return loss
-
-def generator_loss(input):
-    N = input.size()
-    true_labels = Variable(torch.ones(N)).type(input.type())
-    loss = bce_loss(input, true_labels)
-    return loss
-'''
 class vgg_loss(_Loss):
     """
     Definition: perceptual_loss = vgg loss + gan loss + mse loss
@@ -64,23 +41,7 @@ class vgg_loss(_Loss):
         vgg_loss = torch.nn.functional.mse_loss(self.vgg(input)[1], self.vgg(target)[1], size_average=None, reduce=None, reduction='sum')
         #return mse_loss+1e-3*gan_loss+2e-6*vgg_loss
         return vgg_loss
-'''
-def initialize_weights(self):
-    for m in self.modules():
-        if isinstance(m, nn.Conv2d):
-            init.orthogonal_(m.weight)
-            print('init weight')
-            if m.bias is not None:
-                init.constant_(m.bias, 0)
-        elif isinstance(m, nn.BatchNorm2d):
-            init.constant_(m.weight, 1)
-            init.constant_(m.bias, 0)
-        elif isinstance(m, nn.Linear):
-            init.xavier_uniform(m.weight)
-            print('init weight')
-            if m.bias is not None:
-                m.bias.data.fill_(0.01)'
-'''
+
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
