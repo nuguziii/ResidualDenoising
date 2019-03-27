@@ -88,6 +88,7 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_
     criterion_l1 = nn.L1Loss(size_average=False, reduction='sum')
     criterion_bce = nn.BCELoss(size_average=False, reduction='sum')
     criterion_l2 = sum_squared_error()
+    criterion_ssim = SSIM()
 
     if torch.cuda.is_available():
         modelG.to(device)
@@ -141,6 +142,7 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_
 
                 l1_loss = criterion_l1(fake, batch_original)
                 perceptual_loss = criterion_perceptual(fake, batch_original, 0)
+                #ssim_out = 1-criterion_ssim(fake, batch_original)
                 #l2_loss = criterion_l2(fake, batch_original)
 
                 g_loss = l1_loss+2e-2*perceptual_loss+1e-2*gan_loss
@@ -149,7 +151,7 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_
                 optimizerG.step()
 
                 if cnt%100 == 0:
-                    line = '%4d %4d / %4d g_loss = %2.4f\t(snet_l2_loss = %2.4f / l1_loss=%4d / perceptual_loss=%4d / gan_loss=%4d)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size, l1_loss.item()/batch_size, perceptual_loss.item()/batch_size, gan_loss.item()/batch_size)
+                    line = '%4d %4d / %4d g_loss = %2.4f\t(snet_l2_loss = %2.2f / l1_loss=%2.2f / perceptual_loss=%2.2f / gan_loss=%2.2f / sim_loss=%2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size, l1_loss.item()/batch_size, perceptual_loss.item()/batch_size, gan_loss.item()/batch_size, ssim_out.item()/batch_size)
                     print(line)
                     f.write(line)
                     f.write('\n')
