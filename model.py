@@ -20,6 +20,8 @@ class Model(nn.Module):
             self.SNet = SNet_texture_ver1()
         elif model_name[1]==4:
             self.SNet = SNet_texture_ver2()
+        elif model_name[1]==5:
+            self.SNet = SNet_fgn_ver1()
 
     def forward(self, x):
         r = self.DNet(x)
@@ -185,4 +187,46 @@ class SNet_texture_ver2(nn.Module):
         concat = torch.cat((size1, size2, size4, size8, g), 1)
 
         out = self.conv2(concat)
+        return out
+
+class SNet_fgn_ver1(nn.Module):
+    def __init__(self, kernel_size=3, image_channels=1):
+        super(SNet_fgn_ver1, self).__init__()
+        self.tpn = TPN()
+
+        self.conv_g = nn.Sequential(
+            nn.Conv2d(image_channels, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True),
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True),
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True),
+            nn.Conv2d(4, 1, 3, 1, 1),
+            nn.BatchNorm2d(1),
+            nn.Sigmoid()
+        )
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(image_channels*2, 1, 3, 1, 1)
+            #nn.BatchNorm2d(1),
+            #nn.ReLU(True)
+        )
+
+        self.fgn = dynamic_filter(image_channels=image_channels)
+
+    def forward(self, x, g):
+        g_ = self.conv_g(g)
+        x_ = self.tpn(x)
+
+        x = self.conv1(torch.cat((x_,g_),1))
+
+        filter_x = self.fgn(x)
+        patches = F.pad(x, (4,4,4,4), "constant", 0)
+        patches = patches.unfold(2,9,1).unfold(3,9,1)
+        patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
+        out = torch.sum(patches*filter_x, 1, keepdim=True)
+
         return out
