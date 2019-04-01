@@ -111,14 +111,15 @@ def datagenerator(data_dir='data/Train400', verbose=False):
     for i in range(len(file_list)):
         patches = gen_patches(file_list[i])
         for patch in patches:
-            data.append(patch)
+            if patch.shape[0] is 80 and patch.shape[1] is 80:
+                data.append(patch)
         if verbose:
-            print(str(i+1) + '/' + str(len(file_list)) + ' is done ^_^')
+            print(str(i+1) + '/' + str(len(file_list)) + ' is done')
     data = np.array(data, dtype='uint8')
     data = np.expand_dims(data, axis=3)
     discard_n = len(data)-len(data)//batch_size*batch_size  # because of batch namalization
     data = np.delete(data, range(discard_n), axis=0)
-    print('^_^-training data finished-^_^')
+    print('--finished loading training data--')
     return data
 
 
