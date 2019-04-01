@@ -52,16 +52,16 @@ def weights_init(m):
         nn.init.constant_(m.bias.data, 0)
         print('init bn')
 
-def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
+def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
     device = torch.device(device)
 
-    if not os.path.exists(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1]))):
-        os.mkdir(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1])))
+    if not os.path.exists(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1])+"d"+str(depth))):
+        os.mkdir(os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1])+"d"+str(depth)))
 
-    save_dir = os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1]))
+    save_dir = os.path.join(model_dir,"model"+str(sigma)+"m"+str(model_name[1])+"d"+str(depth))
 
     from datetime import date
-    save_name = "model_mode" + str(model_name[1])+"_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
+    save_name = "model_mode" + str(model_name[1])+str(depth)+"_"+ "".join(str(date.today()).split('-')[1:]) + ".pth"
 
     f = open(os.path.join(save_dir,save_name.replace(".pth",".txt")),'w')
 
