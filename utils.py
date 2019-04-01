@@ -114,6 +114,7 @@ class dynamic_filter(nn.Module):
         x_ = self.decoder(x_)
         x_ = self.conv1(x_)
         filter = self.softmax(x_)
+
         return filter
 
 class TPN(nn.Module):
@@ -180,9 +181,7 @@ class TPN(nn.Module):
             nn.ReLU(True)
         )
         self.conv4 = nn.Sequential(
-            nn.Conv2d(16, 1, 3, 1, 1),
-            nn.BatchNorm2d(1),
-            nn.Sigmoid()
+            nn.Conv2d(16, 1, 3, 1, 1)
         )
 
     def forward(self, x):
@@ -215,3 +214,31 @@ class TPN(nn.Module):
         concat = torch.cat((size1, size2, size4, size8), 1)
 
         return self.conv4(concat)
+
+def conv_block(in_nc, out_nc, kernel_size, stride=1, dilation=1, groups=1, bias=True, \
+               pad_type='zero', norm_type=None, act_type='relu', mode='CNA'):
+    '''
+    Conv layer with padding, normalization, activation
+    mode: CNA --> Conv -> Norm -> Act
+        NAC --> Norm -> Act --> Conv (Identity Mappings in Deep Residual Networks, ECCV16)
+    '''
+    assert mode in ['CNA', 'NAC', 'CNAC'], 'Wong conv mode [{:s}]'.format(mode)
+    padding = get_valid_padding(kernel_size, dilation)
+    p = pad(pad_type, padding) if pad_type and pad_type != 'zero' else None
+    padding = padding if pad_type == 'zero' else 0
+
+    c = nn.Conv2d(in_nc, out_nc, kernel_size=kernel_size, stride=stride, padding=padding, \
+            dilation=dilation, bias=bias, groups=groups)
+    a = act(act_type) if act_type else None
+    if 'CNA' in mode:
+        n = norm(norm_type, out_nc) if norm_type else None
+        return sequential(p, c, n, a)
+    elif mode == 'NAC':
+        if norm_type is None and act_type is not None:
+            a = act(act_type, inplace=False)
+            # Important!
+            # input----ReLU(inplace)----Conv--+----output
+            #        |________________________|
+            # inplace ReLU will modify the input, therefore wrong output
+        n = norm(norm_type, in_nc) if norm_type else None
+        return sequential(n, a, p, c)
