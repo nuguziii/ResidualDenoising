@@ -85,8 +85,8 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_
     modelD.apply(weights_init)
 
     criterion_perceptual = vgg_loss(device)
-    criterion_l1 = nn.L1Loss(size_average=False, reduction='sum')
-    criterion_bce = nn.BCELoss(size_average=False, reduction='sum')
+    criterion_l1 = nn.L1Loss(size_average=None, reduce=None, reduction='sum')
+    criterion_bce = nn.BCELoss()
     criterion_l2 = sum_squared_error()
     criterion_ssim = SSIM()
 
@@ -106,6 +106,7 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_
     for epoch in range(n_epoch):
         for sig in sigma_list:
             x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
+            print(x.shape)
             x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
             dataset = DenoisingDataset(x, sigma=sig)
             loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
@@ -116,14 +117,16 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_
                 if torch.cuda.is_available():
                     batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
 
+                '''
                 modelD.zero_grad()
                 b_size = batch_original.size(0)
                 label = torch.full((b_size,), 1, device=device)
                 output = modelD(batch_original).view(-1)
                 errD_real = criterion_bce(output, label)
                 errD_real.backward(retain_graph=True)
-
+                '''
                 fake, structure, denoised = modelG(batch_noise)
+                '''
                 label.fill_(0)
                 output = modelD(fake.detach()).view(-1)
                 errD_fake = criterion_bce(output, label)
@@ -131,12 +134,13 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_
 
                 d_loss = errD_real + errD_fake
                 optimizerD.step()
-
+                '''
                 modelG.zero_grad()
+                '''
                 label = torch.full((b_size,), 1, device=device)
                 output = modelD(fake).view(-1)
                 gan_loss = criterion_bce(output, label)
-
+                '''
                 s_loss = criterion_l2(structure, batch_original-denoised)
                 s_loss.backward(retain_graph=True)
 
@@ -145,13 +149,13 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, device="cuda:0", data_
                 #ssim_out = 1-criterion_ssim(fake, batch_original)
                 #l2_loss = criterion_l2(fake, batch_original)
 
-                g_loss = l1_loss+2e-2*perceptual_loss+1e-2*gan_loss
+                g_loss = l1_loss+2e-2*perceptual_loss #+1e-2*gan_loss
                 g_loss.backward(retain_graph=True)
                 epoch_loss_g += g_loss.item()
                 optimizerG.step()
 
                 if cnt%100 == 0:
-                    line = '%4d %4d / %4d g_loss = %2.4f\t(snet_l2_loss = %2.2f / l1_loss=%2.2f / perceptual_loss=%2.2f / gan_loss=%2.2f / sim_loss=%2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size, l1_loss.item()/batch_size, perceptual_loss.item()/batch_size, gan_loss.item()/batch_size, ssim_out.item()/batch_size)
+                    line = '%4d %4d / %4d g_loss = %2.4f\t(snet_l2_loss = %2.4f / l1_loss=%2.4f / perceptual_loss=%2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size, l1_loss.item()/batch_size, perceptual_loss.item()/batch_size)
                     print(line)
                     f.write(line)
                     f.write('\n')
