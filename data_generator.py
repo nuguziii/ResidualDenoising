@@ -26,7 +26,7 @@ import numpy as np
 from torch.utils.data import Dataset
 import torch
 
-patch_size, stride = 80, 10
+patch_size, stride = 80, 10  #원래 80, 10이었음
 aug_times = 1
 scales = [1, 0.9, 0.8, 0.7]
 batch_size = 128
@@ -44,9 +44,19 @@ class DenoisingDataset(Dataset):
         self.sigma = sigma
 
     def __getitem__(self, index):
+
         batch_x = self.xs[index]
+        '''
         noise = torch.randn(batch_x.size()).mul_(self.sigma/255.0)
         batch_y = batch_x + noise
+        '''
+        if self.sigma==0:
+            sig=torch.randint(0,55, size=(batch_x.size(0),),dtype=batch_x.dtype)
+        else:
+            sig=self.sigma
+        noise = torch.randn(batch_x.size()).mul_(sig/255.0)
+        batch_y = batch_x + noise
+
         return batch_y, batch_x
 
     def __len__(self):
@@ -111,8 +121,11 @@ def datagenerator(data_dir='data/Train400', verbose=False):
     for i in range(len(file_list)):
         patches = gen_patches(file_list[i])
         for patch in patches:
-            if patch.shape[0] is 80 and patch.shape[1] is 80:
+            '''
+            if patch.shape[0] is patch_size and patch.shape[1] is patch_size:
                 data.append(patch)
+            '''
+            data.append(patch)
         if verbose:
             print(str(i+1) + '/' + str(len(file_list)) + ' is done')
     data = np.array(data, dtype='uint8')
