@@ -69,6 +69,10 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:
     f.write(('--\t epoch %4d batch_size %4d sigma %4d\n' % (n_epoch, batch_size, sigma)))
     f.write(model_name[0])
 
+    DNet = torch.load(os.path.join(model_dir, model_name[0]))
+
+    DNet.eval()
+
     modelG = Model(model_dir=model_dir,model_name=model_name) #guidance='noisy, denoised'
     modelD = discriminator()
 
@@ -80,6 +84,7 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:
     if (device.type == 'cuda') and (ngpu > 1):
         modelG = nn.DataParallel(modelG, list(range(ngpu)))
         modelD = nn.DataParallel(modelD, list(range(ngpu)))
+        DNet = nn.DataParallel(DNet, list(range(ngpu)))
 
     modelG.apply(weights_init)
     modelD.apply(weights_init)
@@ -93,6 +98,7 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:
     if torch.cuda.is_available():
         modelG.to(device)
         modelD.to(device)
+        DNet.to(device)
 
     optimizerG = optim.Adam(modelG.parameters(), lr=lr, betas=(0.5, 0.999),  weight_decay=1e-5)
     optimizerD = optim.Adam(modelD.parameters(), lr=lr, betas=(0.5, 0.999), weight_decay=1e-5)
@@ -125,7 +131,8 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:
                 errD_real = criterion_bce(output, label)
                 errD_real.backward(retain_graph=True)
                 '''
-                fake, structure, denoised = modelG(batch_noise)
+                residual = DNet(batch_noise)
+                fake, structure, denoised = modelG(batch_noise, residual)
                 '''
                 label.fill_(0)
                 output = modelD(fake.detach()).view(-1)
@@ -169,7 +176,7 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:
             if (epoch+1)%20 == 0:
                 torch.save(modelG, os.path.join(save_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
-    torch.save(modelG, os.path.join(save_dir, save_name))
+        torch.save(modelG, os.path.join(save_dir, save_name))
     f.close()
 
 def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models/SNet', model_name=None, model=0):
