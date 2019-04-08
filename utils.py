@@ -117,6 +117,52 @@ class dynamic_filter(nn.Module):
 
         return filter
 
+class dynamic_filter_multi(nn.Module):
+    def __init__(self, kernel_size=9, image_channels=1, out_channels=2):
+        super(dynamic_filter_multi, self).__init__()
+        layers = []
+        #encoder
+        layers.append(nn.Conv2d(in_channels=image_channels, out_channels=32, kernel_size=3, stride=1, padding=1, bias=False))
+        layers.append(nn.LeakyReLU(inplace=True))
+        layers.append(nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=2, padding=1, bias=False))
+        layers.append(nn.LeakyReLU(inplace=True))
+        layers.append(nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
+        layers.append(nn.LeakyReLU(inplace=True))
+        layers.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
+        layers.append(nn.LeakyReLU(inplace=True))
+
+        #mid
+        layers.append(nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1, bias=False))
+        layers.append(nn.LeakyReLU(inplace=True))
+        layers.append(nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
+        layers.append(nn.LeakyReLU(inplace=True))
+        layers.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
+        layers.append(nn.LeakyReLU(inplace=True))
+
+        self.encoder = nn.Sequential(*layers)
+
+        layers2 = []
+        layers2.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
+        layers2.append(nn.LeakyReLU(inplace=True))
+        layers2.append(nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False))
+        layers2.append(nn.LeakyReLU(inplace=True))
+        layers2.append(nn.Conv2d(in_channels=64, out_channels=128, kernel_size=1, stride=1, padding=0, bias=False))
+        layers2.append(nn.LeakyReLU(inplace=True))
+
+        self.decoder = nn.Sequential(*layers2)
+
+        self.conv1 = nn.Conv2d(in_channels=128, out_channels=kernel_size*kernel_size*out_channels, kernel_size=1, stride=1, padding=0, bias=False)
+        self.softmax = nn.Softmax(-1)
+
+    def forward(self, x):
+        x_ = self.encoder(x)
+        x_ = nn.Upsample(size=(x.size(2),x.size(3)))(x_)
+        x_ = self.decoder(x_)
+        x_ = self.conv1(x_)
+        filter = self.softmax(x_)
+
+        return filter
+
 class TPN(nn.Module):
     def __init__(self, image_channels=1):
         super().__init__()
