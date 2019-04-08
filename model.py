@@ -9,7 +9,7 @@ from utils import *
 class Model(nn.Module):
     def __init__(self, model_dir=None, model_name=[]):
         super(Model, self).__init__()
-        self.DNet = torch.load(os.path.join(model_dir, model_name[0]))
+        #self.DNet = torch.load(os.path.join(model_dir, model_name[0]))
         if model_name[1]==0:
             self.SNet = SNet_jfver1()
         elif model_name[1]==1:
@@ -23,10 +23,9 @@ class Model(nn.Module):
         elif model_name[1]==5:
             self.SNet = SNet_fgn_ver1()
 
-    def forward(self, x):
-        r = self.DNet(x)
-        d = x-r
-        s = self.SNet(r, d)
+    def forward(self, origin, residual):
+        d = origin-residual
+        s = self.SNet(residual, d)
         out = s+d
         return out, s, d
 
