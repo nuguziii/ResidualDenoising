@@ -22,10 +22,12 @@ class Model(nn.Module):
             self.SNet = SNet_texture_ver2()
         elif model_name[1]==5:
             self.SNet = SNet_fgn_ver1()
+        elif model_name[1]==6:
+            self.SNet = SNet_fgn_ver2()
 
     def forward(self, origin, residual):
         d = origin-residual
-        s = self.SNet(residual, d)
+        s= self.SNet(residual, d)
         out = s+d
         return out, s, d
 
@@ -226,6 +228,58 @@ class SNet_fgn_ver1(nn.Module):
         patches = F.pad(x, (4,4,4,4), "constant", 0)
         patches = patches.unfold(2,9,1).unfold(3,9,1)
         patches = patches.permute(0,1,4,5,2,3).squeeze(1).reshape(-1,9*9,x.size(2),x.size(3))
+        out = torch.sum(patches*filter_x, 1, keepdim=True)
+
+        return out
+
+class SNet_fgn_ver1_temp(nn.Module):
+    def __init__(self, kernel_size=3, image_channels=1):
+        super(SNet_fgn_ver1_temp, self).__init__()
+        self.tpn = TPN()
+
+    def forward(self, x):
+        #g_ = self.conv_g(g)
+        x_ = self.tpn(x)
+        out = x_
+        return out
+
+class SNet_fgn_ver2(nn.Module):
+    def __init__(self, kernel_size=3, image_channels=1):
+        super(SNet_fgn_ver2, self).__init__()
+        self.tpn = TPN()
+
+        self.conv_g = nn.Sequential(
+            nn.Conv2d(image_channels, 16, 3, 1, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True),
+            nn.Conv2d(16, 8, 3, 1, 1),
+            nn.BatchNorm2d(8),
+            nn.ReLU(True),
+            nn.Conv2d(8, 4, 3, 1, 1),
+            nn.BatchNorm2d(4),
+            nn.ReLU(True),
+            nn.Conv2d(4, 1, 3, 1, 1),
+            nn.BatchNorm2d(1),
+            nn.Sigmoid()
+        )
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(image_channels*2, 1, 3, 1, 1)
+            #nn.BatchNorm2d(1),
+            #nn.ReLU(True)
+        )
+
+        self.fgn = dynamic_filter_multi(image_channels=2)
+
+    def forward(self, x, g):
+        g_ = self.conv_g(g)
+        x_ = self.tpn(x)
+
+        x_ = torch.cat((x_,g_),1)
+        filter_x = self.fgn(x_)
+        patches = F.pad(x_, (4,4,4,4), "constant", 0)
+        patches = patches.unfold(2,9,1).unfold(3,9,1)
+        patches = patches.permute(0,1,4,5,2,3).reshape(-1,2*9*9,x.size(2),x.size(3))
         out = torch.sum(patches*filter_x, 1, keepdim=True)
 
         return out
