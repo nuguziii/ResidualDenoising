@@ -28,6 +28,30 @@ class Model(nn.Module):
     def forward(self, origin, residual):
         d = origin-residual
         s= self.SNet(residual, d)
+        #s = self.SNet(residual)
+        out = s+d
+        return out, s, d
+
+class Model_noise(nn.Module):
+    def __init__(self, model_dir=None, model_name=[]):
+        super(Model_noise, self).__init__()
+        self.DNet = torch.load(os.path.join(model_dir, model_name[0]))
+        if model_name[1]==0:
+            self.SNet = SNet_jfver1()
+        elif model_name[1]==1:
+            self.SNet = SNet_dfver1()
+        elif model_name[1]==2:
+            self.SNet = SNet_dfver2()
+        elif model_name[1]==3:
+            self.SNet = SNet_texture_ver1()
+        elif model_name[1]==4:
+            self.SNet = SNet_texture_ver2()
+        elif model_name[1]==5:
+            self.SNet = SNet_fgn_ver1()
+
+    def forward(self, x, r):
+        d = x-r
+        s = self.SNet(r, x)
         out = s+d
         return out, s, d
 
