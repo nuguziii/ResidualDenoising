@@ -323,9 +323,11 @@ def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, devi
 
             elapsed_time = time.time() - start_time
             print('epoch = %4d , sigma = %4d, loss = %4.4f , time = %4.2f s' % (epoch+1, sig, epoch_loss/n_count, elapsed_time))
-            if (epoch+1)%10 == 0:
+            if (epoch+1)%25 == 0:
                 torch.save(model, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
+            torch.save(model, os.path.join(model_dir, save_name))
 
     torch.save(model, os.path.join(model_dir, save_name))
+
 if __name__ == '__main__':
-    pretrain_SNet(device="cuda:0", model_name=['DNet_sigma=25_1.pth'], save_name='SNet_25_denoised.pth', guidance='denoised')
+    pretrain_DNet(batch_size=128, n_epoch=150, sigma=50, lr=1e-3, depth=17, device="cuda:0", data_dir='./data/Train400', model_dir='models')
