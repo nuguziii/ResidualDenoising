@@ -126,4 +126,4 @@ def train(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, lr2=1e-5, depth=17, de
     torch.save(model2, os.path.join(model_dir, save_name2))
 
 if __name__ == '__main__':
-    train(batch_size=32, n_epoch=150, sigma=50, lr=1e-3, lr2=1e-5, depth=17, device="cuda:0", data_dir='../data/Train400', model_dir='models')
+    train(batch_size=128, n_epoch=150, sigma=50, lr=1e-3, lr2=1e-5, depth=17, device="cuda:0", data_dir='../data/Train400', model_dir='models')
