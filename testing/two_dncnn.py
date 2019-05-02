@@ -55,6 +55,7 @@ def train(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, lr2=1e-5, depth=17, de
         os.mkdir(model_dir)
 
     save_name = "net.pth"
+    save_name2 = "net2.pth"
 
     print('\n')
     print('--\t This model is pre-trained DNet saved as ',save_name )
@@ -117,10 +118,12 @@ def train(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, lr2=1e-5, depth=17, de
 
         elapsed_time = time.time() - start_time
         print('epoch = %4d , sigma = %4d, 1_loss = %4.4f, loss = %4.4f , time = %4.2f s' % (epoch+1, sigma, epoch_loss_first/n_count, epoch_loss/n_count, elapsed_time))
-        if (epoch+1)%1 == 0:
+        if (epoch+1)%25 == 0:
             torch.save(model, os.path.join(model_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
+            torch.save(model2, os.path.join(model_dir, save_name2.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
     torch.save(model, os.path.join(model_dir, save_name))
+    torch.save(model2, os.path.join(model_dir, save_name2))
 
 if __name__ == '__main__':
     train(batch_size=32, n_epoch=150, sigma=50, lr=1e-3, lr2=1e-5, depth=17, device="cuda:0", data_dir='../data/Train400', model_dir='models')
