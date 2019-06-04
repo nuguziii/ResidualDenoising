@@ -43,14 +43,17 @@ class vgg_loss(_Loss):
         return vgg_loss
 
 def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-        print('init conv')
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-        print('init bn')
+    try:
+        classname = m.__class__.__name__
+        if classname.find('Conv') != -1:
+            nn.init.normal_(m.weight.data, 0.0, 0.02)
+            print('init conv')
+        elif classname.find('BatchNorm') != -1:
+            nn.init.normal_(m.weight.data, 1.0, 0.02)
+            nn.init.constant_(m.bias.data, 0)
+            print('init bn')
+    except:
+        pass
 
 def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=None):
     device = torch.device(device)
@@ -328,4 +331,4 @@ def pretrain_DNet(batch_size=128, n_epoch=150, sigma=25, lr=1e-3, depth=17, devi
 
     torch.save(model, os.path.join(model_dir, save_name))
 if __name__ == '__main__':
-    pretrain_SNet(device="cuda:0", model_name=['DNet_sigma=25_1.pth'], save_name='SNet_25_denoised.pth', guidance='denoised')
+    train(batch_size=64, n_epoch=150, sigma=25, lr=1e-3, depth=17, device="cuda:0", data_dir='./data/Train400', model_dir='models', model_name=['dncnn50(7).pth',6])
