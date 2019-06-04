@@ -155,11 +155,11 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:
                 s_loss.backward(retain_graph=True)
 
                 l1_loss = criterion_l1(fake, batch_original)
-                perceptual_loss = criterion_perceptual(fake, batch_original, 0)
+                #perceptual_loss = criterion_perceptual(fake, batch_original, 0)
                 #ssim_out = 1-criterion_ssim(fake, batch_original)
                 #l2_loss = criterion_l2(fake, batch_original)
 
-                g_loss = l1_loss+2e-2*perceptual_loss #+1e-2*gan_loss
+                g_loss = l1_loss #+2e-2*perceptual_loss #+1e-2*gan_loss
                 g_loss.backward(retain_graph=True)
                 epoch_loss_g += g_loss.item()
                 optimizerG.step()
