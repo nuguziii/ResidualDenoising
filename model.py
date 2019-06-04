@@ -11,47 +11,24 @@ class Model(nn.Module):
         super(Model, self).__init__()
         #self.DNet = torch.load(os.path.join(model_dir, model_name[0]))
         if model_name[1]==0:
-            self.SNet = SNet_jfver1()
+            self.net = SNet_jfver1()
         elif model_name[1]==1:
-            self.SNet = SNet_dfver1()
+            self.net = SNet_dfver1()
         elif model_name[1]==2:
-            self.SNet = SNet_dfver2()
+            self.net = SNet_dfver2()
         elif model_name[1]==3:
-            self.SNet = SNet_texture_ver1()
+            self.net = SNet_texture_ver1()
         elif model_name[1]==4:
-            self.SNet = SNet_texture_ver2()
+            self.net = SNet_texture_ver2()
         elif model_name[1]==5:
-            self.SNet = SNet_fgn_ver1()
+            self.net = SNet_fgn_ver1()
         elif model_name[1]==6:
-            self.SNet = SNet_fgn_ver2()
+            self.net = FFTConv()
 
     def forward(self, origin, residual):
         d = origin-residual
-        s= self.SNet(residual, d)
+        s= self.net(residual, d)
         #s = self.SNet(residual)
-        out = s+d
-        return out, s, d
-
-class Model_noise(nn.Module):
-    def __init__(self, model_dir=None, model_name=[]):
-        super(Model_noise, self).__init__()
-        self.DNet = torch.load(os.path.join(model_dir, model_name[0]))
-        if model_name[1]==0:
-            self.SNet = SNet_jfver1()
-        elif model_name[1]==1:
-            self.SNet = SNet_dfver1()
-        elif model_name[1]==2:
-            self.SNet = SNet_dfver2()
-        elif model_name[1]==3:
-            self.SNet = SNet_texture_ver1()
-        elif model_name[1]==4:
-            self.SNet = SNet_texture_ver2()
-        elif model_name[1]==5:
-            self.SNet = SNet_fgn_ver1()
-
-    def forward(self, x, r):
-        d = x-r
-        s = self.SNet(r, x)
         out = s+d
         return out, s, d
 
@@ -74,6 +51,45 @@ class DNet(nn.Module):
     def forward(self, x):
         out = self.dncnn(x)
         return out
+
+class FFTConv(nn.Module):
+    def __init__(self, image_channels=1, patch_size=80):
+        super(FFTConv, self).__init__()
+
+        self.patch_size= patch_size
+        self.net1 = nn.Sequential(
+            nn.Conv2d(in_channels=2, out_channels=2, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(2, eps=0.0001, momentum = 0.95),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=2, out_channels=2, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(2, eps=0.0001, momentum = 0.95),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=2, out_channels=2, kernel_size=3, padding=1, bias=False)
+        )
+
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=2, kernel_size=3, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(in_channels=2, out_channels=1, kernel_size=3, padding=1, bias=False)
+
+        self._initialize_weights()
+
+    def forward(self, x, g):
+        x = self.conv1(x).view(-1,self.patch_size,self.patch_size,2) #[-1,patch_size, patch_size, 2]
+        x = torch.fft(x, 2) #fast fourier transform
+        x = self.net1(x.view(-1,2,self.patch_size,self.patch_size))
+        x = torch.ifft(x.view(-1,self.patch_size,self.patch_size,2), 2).view(-1,2,self.patch_size,self.patch_size) #[-1,2,patch_size, patch_size]
+        out = self.conv2(x) #[-1,1,patch_size, patch_size]
+        return out
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                init.orthogonal_(m.weight)
+                print('init weight')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                init.constant_(m.weight, 1)
+                init.constant_(m.bias, 0)
 
 class SNet_jfver1(nn.Module):
     def __init__(self, kernel_size=3, image_channels=1):
