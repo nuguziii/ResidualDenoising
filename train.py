@@ -165,7 +165,7 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:
                 optimizerG.step()
 
                 if cnt%100 == 0:
-                    line = '%4d %4d / %4d g_loss = %2.4f\t(snet_l2_loss = %2.4f / l1_loss=%2.4f / perceptual_loss=%2.4f)' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size, l1_loss.item()/batch_size, perceptual_loss.item()/batch_size)
+                    line = '%4d %4d / %4d g_loss = %2.4f\t /snet_l2_loss = %2.4f' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size)
                     print(line)
                     f.write(line)
                     f.write('\n')
