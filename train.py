@@ -107,79 +107,74 @@ def train(batch_size=128, n_epoch=300, sigma=25, lr=1e-4, depth=7, device="cuda:
     optimizerD = optim.Adam(modelD.parameters(), lr=lr, betas=(0.5, 0.999), weight_decay=1e-5)
     scheduler = MultiStepLR(optimizerG, milestones=[30, 60, 90], gamma=0.2)  # learning rates
 
-    if sigma==0:
-        sigma_list = [5,10,15,20,25,30,35,40,45,50,55,60,65,70]
-    else:
-        sigma_list = [sigma]
-
     for epoch in range(n_epoch):
-        for sig in sigma_list:
-            x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
-            print(x.shape)
-            x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
-            dataset = DenoisingDataset(x, sigma=sig)
-            loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
-            epoch_loss_g = 0
-            start_time = time.time()
-            n_count=0
-            for cnt, batch_yx in enumerate(loader):
-                if torch.cuda.is_available():
-                    batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
+        x = dg.datagenerator(data_dir=data_dir).astype('float32')/255.0
+        print(x.shape)
+        x = torch.from_numpy(x.transpose((0, 3, 1, 2)))
+        dataset = DenoisingDataset(x, sigma=sigma)
+        loader = DataLoader(dataset=dataset, num_workers=4, drop_last=True, batch_size=batch_size, shuffle=True)
+        epoch_loss_g = 0
+        start_time = time.time()
+        n_count=0
+        for cnt, batch_yx in enumerate(loader):
+            if torch.cuda.is_available():
+                batch_original, batch_noise = batch_yx[1].to(device), batch_yx[0].to(device)
 
-                '''
-                modelD.zero_grad()
-                b_size = batch_original.size(0)
-                label = torch.full((b_size,), 1, device=device)
-                output = modelD(batch_original).view(-1)
-                errD_real = criterion_bce(output, label)
-                errD_real.backward(retain_graph=True)
-                '''
-                residual = DNet(batch_noise)
-                fake, structure, denoised = modelG(batch_noise, residual)
-                '''
-                label.fill_(0)
-                output = modelD(fake.detach()).view(-1)
-                errD_fake = criterion_bce(output, label)
-                errD_fake.backward(retain_graph=True)
+            '''
+            modelD.zero_grad()
+            b_size = batch_original.size(0)
+            label = torch.full((b_size,), 1, device=device)
+            output = modelD(batch_original).view(-1)
+            errD_real = criterion_bce(output, label)
+            errD_real.backward(retain_graph=True)
+            '''
+            residual = DNet(batch_noise)
+            fake, structure, denoised = modelG(batch_noise, residual)
+            '''
+            label.fill_(0)
+            output = modelD(fake.detach()).view(-1)
+            errD_fake = criterion_bce(output, label)
+            errD_fake.backward(retain_graph=True)
 
-                d_loss = errD_real + errD_fake
-                optimizerD.step()
-                '''
-                modelG.zero_grad()
-                '''
-                label = torch.full((b_size,), 1, device=device)
-                output = modelD(fake).view(-1)
-                gan_loss = criterion_bce(output, label)
-                '''
-                s_loss = criterion_l2(structure, batch_original-denoised)
-                s_loss.backward(retain_graph=True)
+            d_loss = errD_real + errD_fake
+            optimizerD.step()
+            '''
+            modelG.zero_grad()
+            '''
+            label = torch.full((b_size,), 1, device=device)
+            output = modelD(fake).view(-1)
+            gan_loss = criterion_bce(output, label)
+            '''
+            #s_loss = criterion_l2(structure, batch_original-denoised)
+            #s_loss.backward(retain_graph=True)
 
-                l1_loss = criterion_l1(fake, batch_original)
-                #perceptual_loss = criterion_perceptual(fake, batch_original, 0)
-                #ssim_out = 1-criterion_ssim(fake, batch_original)
-                #l2_loss = criterion_l2(fake, batch_original)
+            l1_loss = criterion_l2(fake, batch_original)
+            #perceptual_loss = criterion_perceptual(fake, batch_original, 0)
+            #ssim_out = 1-criterion_ssim(fake, batch_original)
+            #l2_loss = criterion_l2(fake, batch_original)
 
-                g_loss = l1_loss #+2e-2*perceptual_loss #+1e-2*gan_loss
-                g_loss.backward(retain_graph=True)
-                epoch_loss_g += g_loss.item()
-                optimizerG.step()
+            g_loss = l1_loss #+2e-2*perceptual_loss #+1e-2*gan_loss
+            g_loss.backward(retain_graph=True)
+            epoch_loss_g += g_loss.item()
+            optimizerG.step()
 
-                if cnt%100 == 0:
-                    line = '%4d %4d / %4d g_loss = %2.4f\t /snet_l2_loss = %2.4f' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size, s_loss.item()/batch_size)
-                    print(line)
-                    f.write(line)
-                    f.write('\n')
-                n_count +=1
+            if cnt%100 == 0:
+                line = '%4d %4d / %4d g_loss = %2.4f\t' % (epoch+1, cnt, x.size(0)//batch_size, g_loss.item()/batch_size)
+                print(line)
+                f.write(line)
+                f.write('\n')
+            n_count +=1
 
-            elapsed_time = time.time() - start_time
-            line = 'epoch = %4d, sigma = %4d, loss = %4.4f , time = %4.2f s' % (epoch+1, sig, epoch_loss_g/(n_count*batch_size), elapsed_time)
-            print(line)
-            f.write(line)
-            f.write('\n')
-            if (epoch+1)%20 == 0:
-                torch.save(modelG, os.path.join(save_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
+        elapsed_time = time.time() - start_time
+        line = 'epoch = %4d, sigma = %4d, loss = %4.4f , time = %4.2f s' % (epoch+1, sigma, epoch_loss_g/(n_count*batch_size), elapsed_time)
+        print(line)
+        f.write(line)
+        f.write('\n')
+        if (epoch+1)%20 == 0:
+            torch.save(modelG, os.path.join(save_dir, save_name.replace('.pth', '_epoch%03d.pth') % (epoch+1)))
 
         torch.save(modelG, os.path.join(save_dir, save_name))
+
     f.close()
 
 def pretrain_SNet(batch_size=128, n_epoch=100, sigma=25, lr=1e-4, device="cuda:0", data_dir='./data/Train400', model_dir='models/SNet', model_name=None, model=0):
