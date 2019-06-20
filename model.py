@@ -5,6 +5,7 @@ import torch.nn.init as init
 import os
 import torch.nn.functional as F
 from utils import *
+from skimage.io import imsave
 
 class Model(nn.Module):
     def __init__(self, model_dir=None, model_name=[]):
@@ -67,18 +68,28 @@ class FFTConv(nn.Module):
             nn.Conv2d(in_channels=2, out_channels=2, kernel_size=3, padding=1, bias=False)
         )
 
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=2, kernel_size=3, padding=1, bias=False)
-        self.conv2 = nn.Conv2d(in_channels=2, out_channels=1, kernel_size=3, padding=1, bias=False)
-
         self._initialize_weights()
 
     def forward(self, x, g):
-        x = self.conv1(x).view(-1,self.patch_size,self.patch_size,2) #[-1,patch_size, patch_size, 2]
-        x = torch.fft(x, 2) #fast fourier transform
-        x = self.net1(x.view(-1,2,self.patch_size,self.patch_size))
-        x = torch.ifft(x.view(-1,self.patch_size,self.patch_size,2), 2).view(-1,2,self.patch_size,self.patch_size) #[-1,2,patch_size, patch_size]
-        out = self.conv2(x) #[-1,1,patch_size, patch_size]
-        return out
+        x_ = torch.zeros(x.size()).type(x.type())
+        x = torch.cat((x, x_), 1)
+        x = torch.fft(x.permute(0,2,3,1), 2) # [batch, patch, patch, 2]
+        x = self.net1(x.permute(0,3,1,2)) # [batch, 2, patch, patch]
+        x = torch.ifft(x.permute(0,2,3,1), 2)
+        x = x.permute(0,3,1,2)
+        x = x[:,0:1,:,:]
+        '''
+        x_0, x_1, x_2, x_3 = x.size() #[batch,1, patch, patch]
+        x = torch.rfft(x.permute(0,2,3,1), 2, onesided=False) #fast fourier transform [batch, patch, patch, 1, 2]
+
+        x = self.net1(x.reshape(x_0,x_2,x_3,-1).permute(0,3,1,2)) #[batch,2, patch, patch]
+        print("x1=", x.size())
+        x = x.permute(0,2,3,1).reshape(x_0, x_2, x_3, 1,2) #[batch, patch, patch, 1, 2]
+        print("x=", x.size())
+        x = torch.irfft(x, 2, onesided=False) #[-1,2,patch_size, patch_size]
+        print("x2=", x.size())
+        '''
+        return x
 
     def _initialize_weights(self):
         for m in self.modules():
