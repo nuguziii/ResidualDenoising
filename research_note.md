@@ -26,5 +26,6 @@
 3. loss function
 
 ### To-Do
-1. Gabor filtering 더 알아보기
-2. FFT-IFFT 구조로 테스트해보기 -> 되면 loss/learning rate 변경해서 다시 실험
+[ ] Gabor filtering 더 알아보기
+[ ] FFT-IFFT 구조로 테스트해보기 -> 되면 loss/learning rate 변경해서 다시 실험
+[ ] DnCNN depth=7 외에도 depth 12, 17 다양하게 실험
