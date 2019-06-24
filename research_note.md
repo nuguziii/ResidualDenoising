@@ -25,6 +25,6 @@
 2. FFT Shift
 3. loss function
 
-### 할 일
+### To-Do
 1. Gabor filtering 더 알아보기
 2. FFT-IFFT 구조로 테스트해보기 -> 되면 loss/learning rate 변경해서 다시 실험
