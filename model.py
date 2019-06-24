@@ -65,6 +65,12 @@ class FFTConv(nn.Module):
             nn.Conv2d(in_channels=2, out_channels=2, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(2, eps=0.0001, momentum = 0.95),
             nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=2, out_channels=2, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(2, eps=0.0001, momentum = 0.95),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=2, out_channels=2, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(2, eps=0.0001, momentum = 0.95),
+            nn.ReLU(inplace=True),
             nn.Conv2d(in_channels=2, out_channels=2, kernel_size=3, padding=1, bias=False)
         )
 
